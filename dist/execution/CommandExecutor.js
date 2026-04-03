@@ -403,7 +403,7 @@ class CommandExecutor {
         const { content, error } = await this.fsSafety.readFile(target);
         if (error)
             return { success: false, error_detail: this.error('permission', true, error, false) };
-        const errorContextHistory = (ctx.conversation_history || []).slice(-3).join('\n');
+        const errorContextHistory = ctx.conversation_history.slice(-3).join('\n');
         let newContent = '';
         let attempt = 0;
         const maxAttempts = 3;

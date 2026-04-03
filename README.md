@@ -1,4 +1,4 @@
-# AGENTai
+# AgentAI
 
 A personal + developer assistant with Arabic-first commands, safe execution, and voice support.
 

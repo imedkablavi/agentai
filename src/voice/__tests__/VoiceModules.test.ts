@@ -23,4 +23,3 @@ describe('Voice modules', () => {
     expect(adapter.speak).toHaveBeenCalled();
   });
 });
-

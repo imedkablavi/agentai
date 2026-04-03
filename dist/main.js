@@ -115,7 +115,7 @@ class WindowsAIAssistantCLI {
             console.log(`🤖 Assistant: ${result.response}`);
             const prefs = this.assistant.getPreferences();
             if (prefs.voice_mode) {
-                const short = prefs.voice_response_mode === 'long' ? result.voiceResponse : result.voiceResponse.split(/\.|!|؟/)[0];
+                const short = prefs.voice_response_mode === 'long' ? result.voiceResponse : result.voiceResponse.split(/\.|!|؟|！/)[0];
                 await this.voice.speak(short, prefs.language);
             }
             console.log(`⏱️  Response time: ${responseTime}ms`);

@@ -1,5 +1,5 @@
 {
-  "name": "windows-ai-assistant-v2",
+  "name": "agentai",
   "version": "2.0.0",
   "description": "Intelligent Windows Personal Assistant with Smart Memory and Context Awareness",
   "main": "src/main.ts",

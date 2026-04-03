@@ -390,7 +390,7 @@ export class CommandExecutor {
     const { content, error } = await this.fsSafety.readFile(target);
     if (error) return { success: false, error_detail: this.error('permission', true, error, false) };
 
-      const errorContextHistory = (ctx.conversation_history || []).slice(-3).join('\n');
+    const errorContextHistory = ctx.conversation_history.slice(-3).join('\n');
     let newContent = '';
     let attempt = 0;
     const maxAttempts = 3;
@@ -405,9 +405,9 @@ export class CommandExecutor {
       try {
         newContent = await this.patchGen.proposeFix(content, contextMemory, target);
         
-      const tempPath = target + `.temp-${Date.now()}`;
-      const tempSuccess = await this.fsSafety.applyPatch(tempPath, newContent);
-      if (tempSuccess.success) {
+        const tempPath = target + `.temp-${Date.now()}`;
+        const tempSuccess = await this.fsSafety.applyPatch(tempPath, newContent);
+        if (tempSuccess.success) {
          const syntaxValid = await this.validator.validateFile(tempPath);
          if (tempSuccess.backupPath) {
            this.fsSafety.rollback(tempPath, tempSuccess.backupPath);
@@ -458,7 +458,7 @@ export class CommandExecutor {
       awaiting_confirmation: true,
       awaiting_followup: true
     });
-      this.context.setLastAction('dev_fix');
+    this.context.setLastAction('dev_fix');
     this.context.setState('AWAITING_CONFIRMATION');
 
     this.logDevAction('dev_fix_preview', target, 'success', Date.now() - start, `Risk: ${riskAnalysis.level}, Attempts: ${attempt+1}, Confidence: ${confidenceScore}, Impacted: ${riskAnalysis.impactedScopes.length}`);

@@ -130,7 +130,8 @@ class ValidationEngine {
             return { level: 'high', reason: 'تعديل على إعدادات جذرية تؤثر على بيئة العمل.', impactedScopes };
         }
         // Explicit entrypoint modification logic
-        if (normalized.match(/(index|main|app)\.(ts|js|tsx|jsx)$/)) {
+        // Treat only explicit entrypoints (index/main) as high risk; app.* stays medium to reduce false positives.
+        if (normalized.match(/(index|main)\.(ts|js|tsx|jsx)$/)) {
             return { level: 'high', reason: 'تعديل على نقطة دخول هيكلية قد يكسر بناء التطبيق.', impactedScopes };
         }
         if (isShared) {

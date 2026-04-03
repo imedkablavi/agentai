@@ -103,6 +103,7 @@ export class ValidationEngine {
     }
     
     // Explicit entrypoint modification logic
+    // Treat only explicit entrypoints (index/main) as high risk; app.* stays medium to reduce false positives.
     if (normalized.match(/(index|main)\.(ts|js|tsx|jsx)$/)) {
       return { level: 'high', reason: 'تعديل على نقطة دخول هيكلية قد يكسر بناء التطبيق.', impactedScopes };
     }

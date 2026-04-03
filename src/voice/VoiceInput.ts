@@ -1,15 +1,16 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DummyVoiceInputAdapter, VoiceInputAdapter } from './VoiceInputAdapter';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export class VoiceInput {
   constructor(
     private provider: VoiceInputAdapter = new DummyVoiceInputAdapter(),
-    private whisperCmd: string = 'python -m whisper'
+    private whisperExecutable: string = 'python',
+    private whisperArgs: string[] = ['-m', 'whisper']
   ) {}
 
   async listen(audioFilePath?: string): Promise<string> {
@@ -18,8 +19,16 @@ export class VoiceInput {
     if (providerText.trim()) return providerText.trim();
 
     try {
-      const escapedPath = audioFilePath.replace(/"/g, '\\"');
-      const { stdout } = await execAsync(`${this.whisperCmd} "${escapedPath}" --language auto --task transcribe --output_format txt`);
+      const { stdout } = await execFileAsync(this.whisperExecutable, [
+        ...this.whisperArgs,
+        audioFilePath,
+        '--language',
+        'auto',
+        '--task',
+        'transcribe',
+        '--output_format',
+        'txt'
+      ]);
       const base = path.parse(audioFilePath).name;
       const dir = path.parse(audioFilePath).dir;
       const txtPath = path.join(dir, `${base}.txt`);

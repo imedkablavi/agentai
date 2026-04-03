@@ -1,9 +1,9 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { VoiceLanguage } from './VoiceInputAdapter';
 import { ConsoleVoiceOutputAdapter, VoiceOutputAdapter } from './VoiceOutputAdapter';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const voiceMap: Record<string, string> = {
   ar: 'Microsoft Farid Online (Natural) - Arabic (Egypt)',
@@ -21,13 +21,11 @@ export class VoiceOutput {
     const cleaned = String(text || '').trim();
     if (!cleaned) return;
     const voice = voiceMap[language] || voiceMap.en;
-    const spoken = mode === 'long' ? cleaned : cleaned.split(/[.!؟!]/)[0].trim();
+    const spoken = mode === 'long' ? cleaned : cleaned.split(/[.!؟！]/)[0].trim();
     if (!spoken) return;
 
     try {
-      const escapedText = spoken.replace(/"/g, '\\"');
-      const escapedVoice = voice.replace(/"/g, '\\"');
-      await execAsync(`${this.edgeTtsCmd} --voice "${escapedVoice}" --text "${escapedText}"`);
+      await execFileAsync(this.edgeTtsCmd, ['--voice', voice, '--text', spoken]);
       return;
     } catch {
       await this.adapter.speak(spoken, language);
