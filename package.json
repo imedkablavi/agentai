@@ -1,0 +1,56 @@
+{
+  "name": "windows-ai-assistant-v2",
+  "version": "2.0.0",
+  "description": "Intelligent Windows Personal Assistant with Smart Memory and Context Awareness",
+  "main": "src/main.ts",
+  "scripts": {
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "ai-assistant",
+    "windows",
+    "voice-assistant",
+    "smart-memory",
+    "context-awareness",
+    "skills-architecture"
+  ],
+  "author": "AI Architect",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "date-fns": "^2.30.0",
+    "dotenv": "^16.3.0",
+    "edge-tts": "^1.0.0",
+    "lodash": "^4.17.21",
+    "node-record-lpcm16": "^1.0.1",
+    "puppeteer": "^21.0.0",
+    "speaker": "^0.5.4",
+    "uuid": "^9.0.0",
+    "winston": "^3.11.0",
+    "ws": "^8.14.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "@types/uuid": "^9.0.0",
+    "@types/lodash": "^4.14.200",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.2.0",
+    "tsx": "^3.14.0",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
+    "eslint": "^8.51.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

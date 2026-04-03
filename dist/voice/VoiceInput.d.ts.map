@@ -1,0 +1,1 @@
+{"version":3,"file":"VoiceInput.d.ts","sourceRoot":"","sources":["../../src/voice/VoiceInput.ts"],"names":[],"mappings":"AAKA,qBAAa,UAAU;IACT,OAAO,CAAC,UAAU;gBAAV,UAAU,GAAE,MAA4B;IAEtD,MAAM,CAAC,aAAa,CAAC,EAAE,MAAM,GAAG,OAAO,CAAC,MAAM,CAAC;CAmBtD"}

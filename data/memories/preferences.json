@@ -1,0 +1,7 @@
+{
+  "language": "ar",
+  "browser": "chrome",
+  "voice_mode": true,
+  "auto_execute_threshold": 0.85,
+  "confirmation_required": true
+}
