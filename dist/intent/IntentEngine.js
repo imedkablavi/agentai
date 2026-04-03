@@ -61,6 +61,22 @@ class IntentEngine {
                     /تذكر\s+(.+)/i,
                     /احفظ\s+(.+)/i,
                     /من\s+الآن\s+فصاعدًا\s+(.+)/i
+                ],
+                'dev_inspect': [
+                    /راجع\s+هذا\s+الملف/i,
+                    /افتح\s+المشروع/i,
+                    /تفحص\s+(.+)/i,
+                    /راجع\s+(.+)/i
+                ],
+                'dev_test': [
+                    /شغّل\s+الاختبارات/i,
+                    /شغل\s+الاختبار/i,
+                    /اختبر\s+(.+)/i
+                ],
+                'dev_fix': [
+                    /صلّح\s+الخطأ/i,
+                    /صلح\s+لمشكلة/i,
+                    /أصلح\s+(.+)/i
                 ]
             },
             tr: {
@@ -104,6 +120,19 @@ class IntentEngine {
                     /hatırla\s+(.+)/i,
                     /kaydet\s+(.+)/i,
                     /bundan\s+sonra\s+(.+)/i
+                ],
+                'dev_inspect': [
+                    /kodu\s+incele/i,
+                    /projeyi\s+aç/i,
+                    /incele\s+(.+)/i
+                ],
+                'dev_test': [
+                    /testleri\s+çalıştır/i,
+                    /test\s+et\s+(.+)/i
+                ],
+                'dev_fix': [
+                    /hatayı\s+düzelt/i,
+                    /düzelt\s+(.+)/i
                 ]
             },
             en: {
@@ -163,6 +192,22 @@ class IntentEngine {
                     /remember\s+(.+)/i,
                     /save\s+(.+)/i,
                     /from\s+now\s+on\s+(.+)/i
+                ],
+                'dev_inspect': [
+                    /inspect\s+code/i,
+                    /review\s+this\s+file/i,
+                    /open\s+project/i,
+                    /inspect\s+(.+)/i,
+                    /review\s+(.+)/i
+                ],
+                'dev_test': [
+                    /run\s+tests?/i,
+                    /test\s+(.+)/i
+                ],
+                'dev_fix': [
+                    /fix\s+bug/i,
+                    /fix\s+error/i,
+                    /fix\s+(.+)/i
                 ]
             }
         };

@@ -7,6 +7,7 @@ const YouTubeSkill_1 = require("./YouTubeSkill");
 const SystemSkill_1 = require("./SystemSkill");
 const SelectionSkill_1 = require("./SelectionSkill");
 const MemorySkill_1 = require("./MemorySkill");
+const DeveloperSkill_1 = require("./DeveloperSkill");
 class SkillRouter {
     constructor() {
         this.skills = [];
@@ -60,7 +61,8 @@ class SkillRouter {
             new YouTubeSkill_1.YouTubeSkill(),
             new SystemSkill_1.SystemSkill(),
             new SelectionSkill_1.SelectionSkill(),
-            new MemorySkill_1.MemorySkill()
+            new MemorySkill_1.MemorySkill(),
+            new DeveloperSkill_1.DeveloperSkill()
         ];
     }
     validateSafety(intent) {

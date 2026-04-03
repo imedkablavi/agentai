@@ -58,6 +58,8 @@ export interface ConversationContext {
     conversation_history: string[];
     timestamp: string;
     selection_context?: SelectionContext | null;
+    dev_patch_target?: string;
+    dev_patch_content?: string;
 }
 export interface MemoryManager {
     getShortTermMemory(): ShortTermMemory | null;

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -9,11 +42,30 @@ const child_process_1 = require("child_process");
 const axios_1 = __importDefault(require("axios"));
 const cheerio_1 = require("cheerio");
 const date_fns_1 = require("date-fns");
+const FileSystemSafety_1 = require("./FileSystemSafety");
+const PatchGenerator_1 = require("../reasoning/PatchGenerator");
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+const ValidationEngine_1 = require("./ValidationEngine");
+const GitSafetyEngine_1 = require("./GitSafetyEngine");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 class CommandExecutor {
     constructor(memory, context) {
         this.memory = memory;
         this.context = context;
+        this.fsSafety = new FileSystemSafety_1.FileSystemSafety();
+        this.patchGen = new PatchGenerator_1.PatchGenerator();
+        this.validator = new ValidationEngine_1.ValidationEngine();
+        this.gitSafety = new GitSafetyEngine_1.GitSafetyEngine();
+    }
+    logDevAction(action, target, result, duration, errorDetails) {
+        try {
+            const logLine = `[${new Date().toISOString()}] DEV_ACTION JSON: ${JSON.stringify({
+                action, target, result, durationMs: duration, error: errorDetails || null
+            })}\n`;
+            fs.appendFileSync(path.posix.join(process.cwd(), '.agent_dev.log'), logLine, 'utf8');
+        }
+        catch { }
     }
     async execute(command, intentLanguage) {
         try {
@@ -46,6 +98,12 @@ class CommandExecutor {
                     return await this.execSelection(command);
                 case 'store_memory':
                     return await this.execStoreMemory(command);
+                case 'dev_inspect':
+                    return await this.execDevInspect(command);
+                case 'dev_test':
+                    return await this.execDevTest(command);
+                case 'dev_fix':
+                    return await this.execDevFix(command);
                 default:
                     return { success: false, error_detail: this.error('unknown', true, this.fallbackError(intentLanguage), true) };
             }
@@ -173,6 +231,195 @@ class CommandExecutor {
             metadata: {}
         });
         return { success: true, data: { action: 'memory_stored', content } };
+    }
+    async execDevInspect(command) {
+        const start = Date.now();
+        const target = command.target || '';
+        if (!target) {
+            this.logDevAction('dev_inspect', target, 'failure', Date.now() - start, 'Missing target path');
+            return { success: false, error_detail: this.error('context', true, 'لم يتم تحديد مسار الملف.', false) };
+        }
+        const { content, error } = await this.fsSafety.readFile(target);
+        if (error) {
+            this.logDevAction('dev_inspect', target, 'failure', Date.now() - start, error);
+            return { success: false, error_detail: this.error('permission', true, error, false) };
+        }
+        try {
+            const riskInfo = this.validator.analyzeRisk(target);
+            const riskPrefix = `**مستوى التأثير:** ${riskInfo.level === 'high' ? 'عالي 🔴' : riskInfo.level === 'medium' ? 'متوسط 🟡' : 'منخفض 🟢'}
+**التبعية النظامية:** هذا الملف يؤثر على ${riskInfo.impactedScopes.length} حزمة مترابطة.
+**السبب النطاقي:** ${riskInfo.reason}
+---\n`;
+            const summary = await this.patchGen.summarizeFile(content, target);
+            this.logDevAction('dev_inspect', target, 'success', Date.now() - start, `Risk: ${riskInfo.level}, Dependencies: ${riskInfo.impactedScopes.length}`);
+            return { success: true, data: { action: 'dev_inspect', target, result: riskPrefix + summary } };
+        }
+        catch (err) {
+            this.logDevAction('dev_inspect', target, 'failure', Date.now() - start, err.message);
+            return { success: false, error_detail: this.error('network', true, 'فشل تحليل الملف.', true) };
+        }
+    }
+    async execDevTest(command) {
+        const start = Date.now();
+        let target = command.target || '';
+        // Nearest package resolution
+        let scopedCwd = process.cwd();
+        let testCmdStr = 'npm run test';
+        if (target && target !== 'test' && target !== 'الاختبارات') {
+            const { root, pkg } = this.validator.getNearestPackageInfo(target);
+            scopedCwd = root;
+            // If we provided a specific file, try to run jest targeted at it if jest is available
+            if (pkg.devDependencies?.jest || pkg.dependencies?.jest) {
+                testCmdStr = `npx jest "${target}"`;
+            }
+            else {
+                testCmdStr = pkg.scripts?.test ? 'npm run test' : 'echo "No test script defined" && exit 1';
+            }
+        }
+        try {
+            const { stdout, stderr } = await execAsync(testCmdStr, { timeout: 60000, cwd: scopedCwd });
+            this.logDevAction('dev_test', target || 'project', 'success', Date.now() - start, `Scope: ${scopedCwd}`);
+            return { success: true, data: { action: 'dev_test', result: stdout.substring(0, 1000) } };
+        }
+        catch (e) {
+            const output = e.stderr || e.stdout || e.message || 'Unknown test error';
+            this.logDevAction('dev_test', target || 'project', 'failure', Date.now() - start, output);
+            return { success: true, data: { action: 'dev_test', result: `ملاحظة: فشل الاختبار في النطاق (${scopedCwd}). النتيجة:\n` + output.substring(0, 1000) } };
+        }
+    }
+    async execDevFix(command) {
+        const ctx = this.context.getContext();
+        const start = Date.now();
+        if (ctx.awaiting_confirmation && ctx.dev_patch_content && ctx.dev_patch_target) {
+            const targetPath = ctx.dev_patch_target;
+            const lockAcquired = await GitSafetyEngine_1.ExecutionMutex.acquire(15000);
+            if (!lockAcquired) {
+                return { success: false, error_detail: this.error('unknown', true, 'هناك عملية أخرى قيد التنفيذ (Race Condition). يرجى المحاولة لاحقاً.', false) };
+            }
+            // 1. Git Atomic Checkpoint
+            const gitCheckpoint = await this.gitSafety.createSafeCheckpoint();
+            // 2. Apply via FileSystemSafety (handles backups natively)
+            const { success, backupPath } = await this.fsSafety.applyPatch(targetPath, ctx.dev_patch_content);
+            this.context.updateContext({ dev_patch_content: undefined, dev_patch_target: undefined, awaiting_confirmation: false });
+            this.context.setLastAction('');
+            if (success) {
+                // Validation Hook (Semantic)
+                const semanticCheck = await this.validator.validateProjectSemantic(targetPath);
+                if (!semanticCheck.success) {
+                    // Atomic Rollback on Semantic Failure
+                    if (gitCheckpoint.success)
+                        await this.gitSafety.restoreCheckpoint(gitCheckpoint.hash);
+                    else if (backupPath)
+                        this.fsSafety.rollback(targetPath, backupPath);
+                    this.logDevAction('dev_fix_apply', targetPath, 'rollback', Date.now() - start, semanticCheck.diff);
+                    GitSafetyEngine_1.ExecutionMutex.release();
+                    return { success: false, error_detail: this.error('unknown', true, `فشل التحقق الشامل بعد التطبيق أو تعارضت الاعتماديات بنطاق (${semanticCheck.scope}).\nتم التراجع كلياً للحفاظ على استقرارية المستودع.\n\nتفاصيل الخطأ:\n${semanticCheck.diff.substring(0, 300)}`, false) };
+                }
+                let resultMsg = 'تم التطبيق بنجاح ومصادقة الاعتماديات بأمان تام.';
+                const runDiff = await this.gitSafety.getGitDiff(targetPath);
+                if (runDiff)
+                    resultMsg += `\n\n**Git Diff:**\n\`\`\`diff\n${runDiff.substring(0, 300)}...\n\`\`\``;
+                // If everything perfectly passed, drop the backup stash explicitly (optional but clean)
+                this.logDevAction('dev_fix_apply', targetPath, 'success', Date.now() - start, semanticCheck.diff);
+                GitSafetyEngine_1.ExecutionMutex.release();
+                return { success: true, data: { action: 'dev_fix', target: targetPath, result: resultMsg } };
+            }
+            else {
+                // Rollback via Git or FS
+                if (gitCheckpoint.success)
+                    await this.gitSafety.restoreCheckpoint(gitCheckpoint.hash);
+                else if (backupPath)
+                    this.fsSafety.rollback(targetPath, backupPath);
+                this.logDevAction('dev_fix_apply', targetPath, 'failure', Date.now() - start, 'FileSystem write error');
+                GitSafetyEngine_1.ExecutionMutex.release();
+                return { success: false, error_detail: this.error('permission', true, 'فشل الحفظ بسبب الأمان. تم التراجع.', false) };
+            }
+        }
+        const target = command.target || '';
+        if (!target)
+            return { success: false, error_detail: this.error('context', true, 'لم يتم تحديد المسار.', false) };
+        const { content, error } = await this.fsSafety.readFile(target);
+        if (error)
+            return { success: false, error_detail: this.error('permission', true, error, false) };
+        const errorContextHistory = ctx.conversation_history.slice(-3).join('\n');
+        let newContent = '';
+        let attempt = 0;
+        const maxAttempts = 3;
+        let fallbackSyntaxError = '';
+        let contextMemory = errorContextHistory;
+        // Analyze Risk
+        const riskAnalysis = this.validator.analyzeRisk(target);
+        // Multi-Step Healing Output loop
+        while (attempt < maxAttempts) {
+            try {
+                newContent = await this.patchGen.proposeFix(content, contextMemory, target);
+                let tempPath = target + `.temp-${Date.now()}`;
+                const tempSuccess = await this.fsSafety.applyPatch(tempPath, newContent);
+                if (tempSuccess.success) {
+                    const syntaxValid = await this.validator.validateFile(tempPath);
+                    this.fsSafety.rollback(tempPath, tempSuccess.backupPath);
+                    if (syntaxValid.success) {
+                        fallbackSyntaxError = '';
+                        break;
+                    }
+                    else {
+                        // Memory iteration
+                        contextMemory = `${errorContextHistory}\n\n[المحاولة السابقة فشلت بسبب الأخطاء التالية:\n${syntaxValid.stderr}\nقم بإصلاحها فوراً.]`;
+                        fallbackSyntaxError = syntaxValid.stderr;
+                        attempt++;
+                    }
+                }
+                else {
+                    break;
+                }
+            }
+            catch (e) {
+                contextMemory = `${errorContextHistory}\n\n[المحاولة السابقة فشلت هيكلياً:\n${e.message}]`;
+                fallbackSyntaxError = e.message;
+                attempt++;
+            }
+        }
+        if (attempt >= maxAttempts || !newContent) {
+            this.logDevAction('dev_fix_loop', target, 'failure', Date.now() - start, 'Max iterations reached');
+            return { success: false, error_detail: this.error('unknown', true, 'تحذير: لقد حاولت الأداة الإصلاح ولكن استمرت الأخطاء الهيكلية:\n' + fallbackSyntaxError, false) };
+        }
+        if (riskAnalysis.level === 'high' && attempt > 0) {
+            this.logDevAction('dev_fix_risk', target, 'failure', Date.now() - start, 'High risk loop aborted');
+            return { success: false, error_detail: this.error('permission', true, `تعديل عالي المخاطر (${riskAnalysis.reason}) استمر في الفشل. يرجى المراجعة يدوياً.`, false) };
+        }
+        // Confidence Calculation
+        let confidenceScore = 1.0;
+        if (riskAnalysis.level === 'high')
+            confidenceScore -= 0.3;
+        if (riskAnalysis.level === 'medium')
+            confidenceScore -= 0.1;
+        confidenceScore -= (attempt * 0.2);
+        confidenceScore = Math.max(0, parseFloat(confidenceScore.toFixed(2)));
+        this.context.updateContext({
+            dev_patch_target: target,
+            dev_patch_content: newContent,
+            awaiting_confirmation: true,
+            awaiting_followup: true
+        });
+        this.context.setLastAction('confirm_action');
+        this.context.setState('AWAITING_CONFIRMATION');
+        this.logDevAction('dev_fix_preview', target, 'success', Date.now() - start, `Risk: ${riskAnalysis.level}, Attempts: ${attempt + 1}, Confidence: ${confidenceScore}, Impacted: ${riskAnalysis.impactedScopes.length}`);
+        // Arabic explanation dynamically mapping risk bounds & confidence
+        let messagePrefix = `\n**نسبة الموثوقية:** ${confidenceScore >= 0.7 ? 'عالية 🟢' : confidenceScore >= 0.4 ? 'متوسطة 🟡' : 'منخفضة 🔴'} (${confidenceScore * 100}%)\n`;
+        messagePrefix += `**نطاق التأثير:** ${riskAnalysis.impactedScopes.length} حزمة مترابطة.\n`;
+        if (confidenceScore < 0.5) {
+            messagePrefix += `⚠️ **تحذير النظام:** الموثوقية منخفضة في هذا الحل المقترح. قد يؤدي لتكسير اجزاء أخرى. ينصح بالمراجعة اليدوية.\n`;
+        }
+        else if (riskAnalysis.level === 'high') {
+            messagePrefix += `⚠️ تنبيه: ${riskAnalysis.reason}\n`;
+        }
+        messagePrefix += `\n\`\`\`\n`;
+        return {
+            success: true,
+            data: { action: 'dev_fix_preview', target, result: messagePrefix + newContent.substring(0, 500) + "\n...```" },
+            requires_followup: true,
+            suggested_actions: ['نعم', 'إلغاء']
+        };
     }
     error(type, recoverable, user_message, retry_suggested) {
         return { type, recoverable, user_message, retry_suggested };

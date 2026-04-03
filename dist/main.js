@@ -125,24 +125,25 @@ class WindowsAIAssistantCLI {
     }
     showHelp() {
         console.log(`
-🤖 Windows AI Assistant V2 - Help
+🤖 Windows AI Assistant V2 - دليلك المساعد
 
-Commands:
-  help        - Show this help message
-  memory      - Show memory insights
-  context     - Show current context
-  clear       - Clear conversation context
-  exit/quit   - Exit the assistant
+الأوامر (Commands):
+  help        - عرض هذه الرسالة (Show help)
+  memory      - عرض معلومات الذاكرة (Memory insights)
+  context     - عرض السياق الحالي (Current context)
+  clear       - مسح سياق المحادثة (Clear context)
+  exit/quit   - إغلاق البرنامج (Exit)
 
-Examples:
+أمثلة (Examples):
   - "افتح كروم" (Open Chrome)
-  - "دور لي فيديوهات عن البرمجة" (Find videos about programming)
+  - "دور لي فيديوهات عن البرمجة" (Find programming videos)
   - "أطفئ الجهاز" (Shutdown computer)
-  - "ابحث عن طريقة عمل الكيك" (Search how to make cake)
-  - "شغل سبوتيفاي" (Play Spotify)
-  - "1" (Select item #1 from previous results)
+  - "راجع هذا الملف" (Review this file - Dev mode)
+  - "شغّل الاختبارات" (Run tests - Dev mode)
+  - "صلّح الخطأ" (Fix the error - Dev mode)
+  - "1" (اختيار العنصر رقم 1)
 
-The assistant supports Arabic, Turkish, and English.
+هذا المساعد يدعم اللغة العربية بشكل أساسي.
 `);
     }
     showMemoryInsights() {
