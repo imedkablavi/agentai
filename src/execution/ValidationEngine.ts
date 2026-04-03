@@ -50,7 +50,8 @@ export class ValidationEngine {
   }
 
   public getImpactedScopes(filePath: string): string[] {
-    const { root, pkg } = this.getNearestPackageInfo(filePath);
+    const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.resolve(this.workspaceRoot, filePath);
+    const { root, pkg } = this.getNearestPackageInfo(absoluteFilePath);
     if (!pkg?.name) return [root];
 
     const currentName = pkg.name;
@@ -60,7 +61,7 @@ export class ValidationEngine {
 
     // Find any package that depends on currentName
     for (const p of allPkgs) {
-      if (p.deps.includes(currentName)) {
+      if (p.dir !== root && p.deps.includes(currentName)) {
         impacted.add(p.dir);
       }
     }
@@ -69,7 +70,8 @@ export class ValidationEngine {
   }
 
   public getNearestPackageInfo(filePath: string): { root: string; pkg: any; isWorkspaceRoot: boolean } {
-    let currentDir = path.dirname(path.resolve(this.workspaceRoot, filePath));
+    const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.resolve(this.workspaceRoot, filePath);
+    let currentDir = path.dirname(absoluteFilePath);
     
     while (currentDir.startsWith(this.workspaceRoot)) {
       const pkgPath = path.join(currentDir, 'package.json');
@@ -101,7 +103,8 @@ export class ValidationEngine {
     }
     
     // Explicit entrypoint modification logic
-    if (normalized.match(/(index|main|app)\.(ts|js|tsx|jsx)$/)) {
+    // Treat only explicit entrypoints (index/main) as high risk; app.* stays medium to reduce false positives.
+    if (normalized.match(/(index|main)\.(ts|js|tsx|jsx)$/)) {
       return { level: 'high', reason: 'تعديل على نقطة دخول هيكلية قد يكسر بناء التطبيق.', impactedScopes };
     }
 

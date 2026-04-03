@@ -15,15 +15,17 @@ describe('CommandExecutor Dev Flows', () => {
     };
 
     // Mock context
-    let ctxState: any = { 
+    let ctxState: any = {
        conversation_history: [],
-       awaiting_confirmation: false
+       awaiting_confirmation: false,
+       awaiting_followup: false
     };
     context = {
       getContext: jest.fn(() => ctxState),
       updateContext: jest.fn((upd) => { Object.assign(ctxState, upd) }),
       setState: jest.fn(),
-      setLastAction: jest.fn()
+      setLastAction: jest.fn(),
+      setSelectionContext: jest.fn()
     };
 
     executor = new CommandExecutor(memory as MemoryManager, context as ContextManager);
@@ -41,8 +43,15 @@ describe('CommandExecutor Dev Flows', () => {
     };
 
     (executor as any).validator = {
+      analyzeRisk: jest.fn().mockReturnValue({ level: 'medium', reason: 'local', impactedScopes: ['/tmp'] }),
+      getNearestPackageInfo: jest.fn().mockReturnValue({ root: process.cwd(), pkg: { scripts: { test: 'jest' } } }),
       validateProjectSemantic: jest.fn().mockResolvedValue({ success: true, diff: 'OK' }),
       validateFile: jest.fn().mockResolvedValue({ success: true, stderr: '', stdout: 'OK', confidence: 'high' })
+    };
+    (executor as any).gitSafety = {
+      createSafeCheckpoint: jest.fn().mockResolvedValue({ success: false }),
+      restoreCheckpoint: jest.fn().mockResolvedValue(true),
+      getGitDiff: jest.fn().mockResolvedValue('diff --git a/app.ts b/app.ts')
     };
   });
 
@@ -51,17 +60,17 @@ describe('CommandExecutor Dev Flows', () => {
     const res = await executor.execute(cmd, 'ar');
     expect(res.success).toBe(true);
     expect(res.data?.action).toBe('dev_inspect');
-    expect(res.data?.result).toBe('الملف سليم');
+    expect(res.data?.result).toContain('الملف سليم');
   });
 
-  it('dev_test runs successfully', async () => {
-    // Note: this actually touches child_process.exec locally. 
-    // Usually we mock execAsync, but for safety testing we can pass a dummy target.
-    // If it fails with "Unknown test error", it is still executing safely.
-    const cmd: ExecutionCommand = { action: 'dev_test', target: '--version', risk_level: 'low', requires_confirmation: false };
+  it('dev_test returns failure when tests fail', async () => {
+    (executor as any).validator.getNearestPackageInfo = jest.fn().mockReturnValue({
+      root: process.cwd(),
+      pkg: { scripts: {} }
+    });
+    const cmd: ExecutionCommand = { action: 'dev_test', target: 'missing.test.ts', risk_level: 'low', requires_confirmation: false };
     const res = await executor.execute(cmd, 'en');
-    expect(res.success).toBe(true);
-    expect(res.data?.action).toBe('dev_test');
+    expect(res.success).toBe(false);
   });
 
   it('dev_fix generates preview and requires confirmation', async () => {
@@ -77,7 +86,7 @@ describe('CommandExecutor Dev Flows', () => {
     expect(updatedCtx.dev_patch_content).toBe('```\nconst a = 2;\n```');
   });
 
-  it('dev_fix applies logic automatically when confirmation is met', async () => {
+  it('dev_fix applies patch when confirmation is met', async () => {
     // Prime the context
     context.getContext().awaiting_confirmation = true;
     context.getContext().dev_patch_target = 'app.ts';
@@ -89,8 +98,20 @@ describe('CommandExecutor Dev Flows', () => {
     jest.spyOn((executor as any), 'logDevAction').mockImplementation(() => {});
 
     const res = await executor.execute(cmd, 'ar');
-    // If it fails, that means native node/tsc exited with code 1. But it correctly executes the confirmation hook.
-    // We just check that applyPatch was called
+    expect(res.success).toBe(true);
     expect((executor as any).fsSafety.applyPatch).toHaveBeenCalledWith('app.ts', 'const updated = true;');
+  });
+
+  it('open_file and read_file are safe and return content', async () => {
+    const openCmd: ExecutionCommand = { action: 'open_file', target: 'app.ts', risk_level: 'low', requires_confirmation: false };
+    const readCmd: ExecutionCommand = { action: 'read_file', target: 'app.ts', risk_level: 'low', requires_confirmation: false };
+
+    const openRes = await executor.execute(openCmd, 'ar');
+    const readRes = await executor.execute(readCmd, 'ar');
+
+    expect(openRes.success).toBe(true);
+    expect(openRes.data?.action).toBe('open_file');
+    expect(readRes.success).toBe(true);
+    expect(readRes.data?.action).toBe('read_file');
   });
 });

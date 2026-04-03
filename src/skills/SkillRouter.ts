@@ -11,6 +11,7 @@ import { SystemSkill } from './SystemSkill';
 import { SelectionSkill } from './SelectionSkill';
 import { MemorySkill } from './MemorySkill';
 import { DeveloperSkill } from './DeveloperSkill';
+import { PersonalAssistantSkill } from './PersonalAssistantSkill';
 
 export class SkillRouter implements ISkillRouter {
   private skills: Skill[] = [];
@@ -77,6 +78,7 @@ export class SkillRouter implements ISkillRouter {
       new SystemSkill(),
       new SelectionSkill(),
       new MemorySkill(),
+      new PersonalAssistantSkill(),
       new DeveloperSkill()
     ];
   }

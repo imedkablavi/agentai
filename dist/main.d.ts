@@ -4,6 +4,7 @@ declare class WindowsAIAssistantCLI {
     private rl;
     private sessionLog;
     private voice;
+    private voiceController;
     constructor();
     private setupEventHandlers;
     private processUserInput;

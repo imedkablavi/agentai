@@ -10,7 +10,14 @@ class ResponseGenerator {
                     application: 'تم فتح {application} بنجاح.',
                     system: 'تم تنفيذ الأمر "{command}" بنجاح.',
                     memory: 'تم حفظ الذاكرة بنجاح.',
-                    selection: 'تم اختيار العنصر رقم {index} بنجاح.'
+                    selection: 'تم اختيار العنصر رقم {index} بنجاح.',
+                    dev_inspect: 'تم فحص الكود {target}. النتيجة: {result}',
+                    dev_test: 'تم تشغيل الاختبارات بنجاح. النتيجة: {result}',
+                    dev_fix: 'تم إصلاح المشكلة في {target}.',
+                    dev_fix_preview: 'تم اقتراح إصلاح لـ {target}:\n{result}',
+                    open_file: 'تم فتح الملف {target}.',
+                    read_file: 'هذا محتوى الملف {target}:\n{result}',
+                    summarize_logs: 'ملخص السجلات من {target}:\n{result}'
                 },
                 error: {
                     general: 'حصل خطأ: {error}',
@@ -23,7 +30,14 @@ class ResponseGenerator {
                     search: 'شو تحب تسوي؟ تقدر تختار رقم أو تبحث عن شي ثاني.',
                     application: 'تحب أسوي شي ثاني مع {application}?',
                     system: 'هل تحب تأكيد الأمر؟',
-                    selection: 'هل تحب تختار شي ثاني؟'
+                    selection: 'هل تحب تختار شي ثاني؟',
+                    dev_inspect: 'هل تحتاج إلى اقتراح إصلاح أو تريد تشغيل الاختبارات؟',
+                    dev_test: 'هل تحب أصلح أخطاء الاختبار؟',
+                    dev_fix: 'هل تحب أراجع الكود بعد الإصلاح؟',
+                    dev_fix_preview: 'هل تريد تطبيق هذا الإصلاح؟',
+                    open_file: 'هل تريد قراءة الملف بالكامل؟',
+                    read_file: 'هل تريد مراجعة ملف آخر؟',
+                    summarize_logs: 'هل تريد أن أراجع ملف سجل آخر؟'
                 }
             },
             tr: {
@@ -32,7 +46,14 @@ class ResponseGenerator {
                     application: '{application} başarıyla açıldı.',
                     system: '"{command}" komutu başarıyla çalıştırıldı.',
                     memory: 'Bellek başarıyla kaydedildi.',
-                    selection: '{index} numaralı öğe başarıyla seçildi.'
+                    selection: '{index} numaralı öğe başarıyla seçildi.',
+                    dev_inspect: 'Kod incelendi {target}. Sonuç: {result}',
+                    dev_test: 'Testler başarıyla tamamlandı. Sonuç: {result}',
+                    dev_fix: '{target} üzerindeki hata düzeltildi.',
+                    dev_fix_preview: '{target} için düzeltme önerildi:\n{result}',
+                    open_file: '{target} dosyası açıldı.',
+                    read_file: '{target} dosya içeriği:\n{result}',
+                    summarize_logs: '{target} için log özeti:\n{result}'
                 },
                 error: {
                     general: 'Hata oluştu: {error}',
@@ -45,7 +66,14 @@ class ResponseGenerator {
                     search: 'Ne yapmak istersin? Bir numara seçebilir veya başka bir şey arayabilirsin.',
                     application: '{application} ile başka bir şey yapmamı ister misin?',
                     system: 'Komutu onaylamak ister misin?',
-                    selection: 'Başka bir şey seçmek ister misin?'
+                    selection: 'Başka bir şey seçmek ister misin?',
+                    dev_inspect: 'Hata düzeltme önermemi veya testleri çalıştırmamı ister misin?',
+                    dev_test: 'Test hatalarını düzeltmemi ister misin?',
+                    dev_fix: 'Düzeltmeden sonra kodu incelememi ister misin?',
+                    dev_fix_preview: 'Bu düzeltmeyi uygulamak ister misin?',
+                    open_file: 'Dosyanın tamamını okumamı ister misin?',
+                    read_file: 'Başka bir dosya okumamı ister misin?',
+                    summarize_logs: 'Başka bir log dosyasını incelememi ister misin?'
                 }
             },
             en: {
@@ -54,7 +82,14 @@ class ResponseGenerator {
                     application: '{application} opened successfully.',
                     system: 'Command "{command}" executed successfully.',
                     memory: 'Memory saved successfully.',
-                    selection: 'Item number {index} selected successfully.'
+                    selection: 'Item number {index} selected successfully.',
+                    dev_inspect: 'Inspected {target}. Result: {result}',
+                    dev_test: 'Tests executed. Result: {result}',
+                    dev_fix: 'Fixed issue in {target}.',
+                    dev_fix_preview: 'Proposed fix for {target}:\n{result}',
+                    open_file: 'Opened file {target}.',
+                    read_file: 'File content for {target}:\n{result}',
+                    summarize_logs: 'Log summary from {target}:\n{result}'
                 },
                 error: {
                     general: 'An error occurred: {error}',
@@ -67,7 +102,14 @@ class ResponseGenerator {
                     search: 'What would you like to do? You can select a number or search for something else.',
                     application: 'Would you like me to do something else with {application}?',
                     system: 'Would you like to confirm the command?',
-                    selection: 'Would you like to select something else?'
+                    selection: 'Would you like to select something else?',
+                    dev_inspect: 'Do you want me to suggest a fix or run tests?',
+                    dev_test: 'Should I fix any test errors?',
+                    dev_fix: 'Would you like me to run tests to verify the fix?',
+                    dev_fix_preview: 'Do you want to apply this fix?',
+                    open_file: 'Do you want me to read the full file?',
+                    read_file: 'Do you want to read another file?',
+                    summarize_logs: 'Do you want me to inspect another log file?'
                 }
             }
         };
@@ -160,6 +202,20 @@ class ResponseGenerator {
             return 'memory';
         if (result.data?.action === 'opened' && result.data?.index)
             return 'selection';
+        if (result.data?.action === 'dev_inspect')
+            return 'dev_inspect';
+        if (result.data?.action === 'dev_test')
+            return 'dev_test';
+        if (result.data?.action === 'dev_fix')
+            return 'dev_fix';
+        if (result.data?.action === 'dev_fix_preview')
+            return 'dev_fix_preview';
+        if (result.data?.action === 'open_file')
+            return 'open_file';
+        if (result.data?.action === 'read_file')
+            return 'read_file';
+        if (result.data?.action === 'summarize_logs')
+            return 'summarize_logs';
         return 'general';
     }
     determineErrorType(result) {

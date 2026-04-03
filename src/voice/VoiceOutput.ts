@@ -1,3 +1,10 @@
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { VoiceLanguage } from './VoiceInputAdapter';
+import { ConsoleVoiceOutputAdapter, VoiceOutputAdapter } from './VoiceOutputAdapter';
+
+const execFileAsync = promisify(execFile);
+
 const voiceMap: Record<string, string> = {
   ar: 'Microsoft Farid Online (Natural) - Arabic (Egypt)',
   tr: 'Microsoft Seda Online (Natural) - Turkish (Turkey)',
@@ -5,15 +12,23 @@ const voiceMap: Record<string, string> = {
 };
 
 export class VoiceOutput {
-  async speak(text: string, language: string): Promise<void> {
+  constructor(
+    private adapter: VoiceOutputAdapter = new ConsoleVoiceOutputAdapter(),
+    private edgeTtsCmd: string = 'edge-tts'
+  ) {}
+
+  async speak(text: string, language: VoiceLanguage, mode: 'short' | 'long' = 'short'): Promise<void> {
+    const cleaned = String(text || '').trim();
+    if (!cleaned) return;
     const voice = voiceMap[language] || voiceMap.en;
-    const short = (text || '').split(/[.!؟!]/)[0];
-    if (!short) return;
+    const spoken = mode === 'long' ? cleaned : cleaned.split(/[.!؟！]/)[0].trim();
+    if (!spoken) return;
+
     try {
-      // Adapter-only: log the chosen voice and text (no audio playback in CLI)
-      console.log(`🔊 (${voice}) ${short}`);
-    } catch (e) {
-      console.warn('Voice output failed:', e);
+      await execFileAsync(this.edgeTtsCmd, ['--voice', voice, '--text', spoken]);
+      return;
+    } catch {
+      await this.adapter.speak(spoken, language);
     }
   }
 }

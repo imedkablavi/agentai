@@ -61,6 +61,37 @@ class IntentEngine {
                     /تذكر\s+(.+)/i,
                     /احفظ\s+(.+)/i,
                     /من\s+الآن\s+فصاعدًا\s+(.+)/i
+                ],
+                'dev_inspect': [
+                    /راجع\s+هذا\s+الملف/i,
+                    /افتح\s+المشروع/i,
+                    /تفحص\s+(.+)/i,
+                    /راجع\s+(.+)/i
+                ],
+                'dev_test': [
+                    /شغّل\s+الاختبارات/i,
+                    /شغل\s+الاختبار/i,
+                    /اختبر\s+(.+)/i
+                ],
+                'dev_fix': [
+                    /صلّح\s+الخطأ/i,
+                    /صلح\s+لمشكلة/i,
+                    /أصلح\s+(.+)/i,
+                    /صلّح\s+المشكلة/i
+                ],
+                'open_file': [
+                    /افتح\s+الملف\s+(.+)/i,
+                    /افتح\s+ملف\s+(.+)/i
+                ],
+                'read_file': [
+                    /اقرأ\s+الملف\s+(.+)/i,
+                    /اقرأ\s+لي\s+الخطأ/i,
+                    /اقرأ\s+(.+)/i
+                ],
+                'summarize_logs': [
+                    /لخّص\s+السجلات/i,
+                    /لخص\s+اللوغ/i,
+                    /اعرض\s+الاخطاء/i
                 ]
             },
             tr: {
@@ -104,6 +135,19 @@ class IntentEngine {
                     /hatırla\s+(.+)/i,
                     /kaydet\s+(.+)/i,
                     /bundan\s+sonra\s+(.+)/i
+                ],
+                'dev_inspect': [
+                    /kodu\s+incele/i,
+                    /projeyi\s+aç/i,
+                    /incele\s+(.+)/i
+                ],
+                'dev_test': [
+                    /testleri\s+çalıştır/i,
+                    /test\s+et\s+(.+)/i
+                ],
+                'dev_fix': [
+                    /hatayı\s+düzelt/i,
+                    /düzelt\s+(.+)/i
                 ]
             },
             en: {
@@ -163,6 +207,33 @@ class IntentEngine {
                     /remember\s+(.+)/i,
                     /save\s+(.+)/i,
                     /from\s+now\s+on\s+(.+)/i
+                ],
+                'dev_inspect': [
+                    /inspect\s+code/i,
+                    /review\s+this\s+file/i,
+                    /open\s+project/i,
+                    /inspect\s+(.+)/i,
+                    /review\s+(.+)/i
+                ],
+                'dev_test': [
+                    /run\s+tests?/i,
+                    /test\s+(.+)/i
+                ],
+                'dev_fix': [
+                    /fix\s+bug/i,
+                    /fix\s+error/i,
+                    /fix\s+(.+)/i
+                ],
+                'open_file': [
+                    /open\s+file\s+(.+)/i
+                ],
+                'read_file': [
+                    /read\s+file\s+(.+)/i,
+                    /read\s+the\s+error/i
+                ],
+                'summarize_logs': [
+                    /summarize\s+logs?/i,
+                    /show\s+errors?/i
                 ]
             }
         };
@@ -263,6 +334,12 @@ class IntentEngine {
             const q = parts[parts.length - 1]?.trim();
             if (q)
                 entities.query = q;
+        }
+        if (['open_file', 'read_file', 'summarize_logs', 'dev_inspect', 'dev_test', 'dev_fix'].includes(intent.name)) {
+            const pathMatch = text.match(/([A-Za-z0-9_./\\-]+\.[A-Za-z0-9]+)/);
+            if (pathMatch) {
+                entities.file_path = pathMatch[1];
+            }
         }
         return {
             ...intent,

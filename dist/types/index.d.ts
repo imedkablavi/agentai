@@ -45,6 +45,7 @@ export interface PreferenceMemory {
     language: 'ar' | 'tr' | 'en';
     browser: string;
     voice_mode: boolean;
+    voice_response_mode?: 'short' | 'long';
     auto_execute_threshold: number;
     confirmation_required: boolean;
 }
@@ -58,6 +59,8 @@ export interface ConversationContext {
     conversation_history: string[];
     timestamp: string;
     selection_context?: SelectionContext | null;
+    dev_patch_target?: string;
+    dev_patch_content?: string;
 }
 export interface MemoryManager {
     getShortTermMemory(): ShortTermMemory | null;

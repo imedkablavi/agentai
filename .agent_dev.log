@@ -1,0 +1,12 @@
+[2026-04-03T23:47:05.238Z] DEV_ACTION JSON: {"action":"dev_inspect","target":"app.ts","result":"success","durationMs":0,"error":"Risk: medium, Dependencies: 1"}
+[2026-04-03T23:47:05.247Z] DEV_ACTION JSON: {"action":"dev_test","target":"missing.test.ts","result":"failure","durationMs":8,"error":"No test script defined\n"}
+[2026-04-03T23:47:05.248Z] DEV_ACTION JSON: {"action":"dev_fix_preview","target":"app.ts","result":"success","durationMs":0,"error":"Risk: medium, Attempts: 1, Confidence: 0.9, Impacted: 1"}
+[2026-04-03T23:48:19.578Z] DEV_ACTION JSON: {"action":"dev_inspect","target":"app.ts","result":"success","durationMs":1,"error":"Risk: medium, Dependencies: 1"}
+[2026-04-03T23:48:19.593Z] DEV_ACTION JSON: {"action":"dev_test","target":"missing.test.ts","result":"failure","durationMs":12,"error":"No test script defined\n"}
+[2026-04-03T23:48:19.595Z] DEV_ACTION JSON: {"action":"dev_fix_preview","target":"app.ts","result":"success","durationMs":0,"error":"Risk: medium, Attempts: 1, Confidence: 0.9, Impacted: 1"}
+[2026-04-03T23:49:20.672Z] DEV_ACTION JSON: {"action":"dev_inspect","target":"app.ts","result":"success","durationMs":0,"error":"Risk: medium, Dependencies: 1"}
+[2026-04-03T23:49:20.720Z] DEV_ACTION JSON: {"action":"dev_test","target":"missing.test.ts","result":"failure","durationMs":46,"error":"No test script defined\n"}
+[2026-04-03T23:49:20.721Z] DEV_ACTION JSON: {"action":"dev_fix_preview","target":"app.ts","result":"success","durationMs":0,"error":"Risk: medium, Attempts: 1, Confidence: 0.9, Impacted: 1"}
+[2026-04-03T23:50:22.951Z] DEV_ACTION JSON: {"action":"dev_inspect","target":"app.ts","result":"success","durationMs":0,"error":"Risk: medium, Dependencies: 1"}
+[2026-04-03T23:50:22.970Z] DEV_ACTION JSON: {"action":"dev_test","target":"missing.test.ts","result":"failure","durationMs":18,"error":"No test script defined\n"}
+[2026-04-03T23:50:22.971Z] DEV_ACTION JSON: {"action":"dev_fix_preview","target":"app.ts","result":"success","durationMs":0,"error":"Risk: medium, Attempts: 1, Confidence: 0.9, Impacted: 1"}

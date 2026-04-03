@@ -37,6 +37,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WindowsAIAssistantCLI = void 0;
 const AIAssistant_1 = require("./AIAssistant");
 const VoiceOutputAdapter_1 = require("./voice/VoiceOutputAdapter");
+const VoiceInput_1 = require("./voice/VoiceInput");
+const VoiceOutput_1 = require("./voice/VoiceOutput");
+const VoiceController_1 = require("./voice/VoiceController");
 const readline = __importStar(require("readline"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -45,6 +48,7 @@ class WindowsAIAssistantCLI {
         this.sessionLog = [];
         this.voice = new VoiceOutputAdapter_1.ConsoleVoiceOutputAdapter();
         this.assistant = new AIAssistant_1.AIAssistant();
+        this.voiceController = new VoiceController_1.VoiceController(this.assistant, new VoiceInput_1.VoiceInput(), new VoiceOutput_1.VoiceOutput());
         this.rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout,
@@ -85,6 +89,12 @@ class WindowsAIAssistantCLI {
                 this.rl.prompt();
                 return;
             }
+            if (trimmedInput.toLowerCase().startsWith('ptt ') || trimmedInput.startsWith('تكلم ')) {
+                const audioPath = trimmedInput.replace(/^ptt\s+/i, '').replace(/^تكلم\s+/, '').trim();
+                await this.voiceController.processOnce(audioPath);
+                this.rl.prompt();
+                return;
+            }
             await this.processUserInput(trimmedInput);
             this.rl.prompt();
         });
@@ -105,8 +115,7 @@ class WindowsAIAssistantCLI {
             console.log(`🤖 Assistant: ${result.response}`);
             const prefs = this.assistant.getPreferences();
             if (prefs.voice_mode) {
-                // Voice mode: short response only
-                const short = result.voiceResponse.split(/\.|!|؟/)[0];
+                const short = prefs.voice_response_mode === 'long' ? result.voiceResponse : result.voiceResponse.split(/\.|!|؟|！/)[0];
                 await this.voice.speak(short, prefs.language);
             }
             console.log(`⏱️  Response time: ${responseTime}ms`);
@@ -125,24 +134,27 @@ class WindowsAIAssistantCLI {
     }
     showHelp() {
         console.log(`
-🤖 Windows AI Assistant V2 - Help
+🤖 Windows AI Assistant V2 - دليلك المساعد
 
-Commands:
-  help        - Show this help message
-  memory      - Show memory insights
-  context     - Show current context
-  clear       - Clear conversation context
-  exit/quit   - Exit the assistant
+الأوامر (Commands):
+  help        - عرض هذه الرسالة (Show help)
+  memory      - عرض معلومات الذاكرة (Memory insights)
+  context     - عرض السياق الحالي (Current context)
+  clear       - مسح سياق المحادثة (Clear context)
+  ptt <path>  - Push-to-talk audio input
+  تكلم <path> - إدخال صوتي من ملف
+  exit/quit   - إغلاق البرنامج (Exit)
 
-Examples:
+أمثلة (Examples):
   - "افتح كروم" (Open Chrome)
-  - "دور لي فيديوهات عن البرمجة" (Find videos about programming)
+  - "دور لي فيديوهات عن البرمجة" (Find programming videos)
   - "أطفئ الجهاز" (Shutdown computer)
-  - "ابحث عن طريقة عمل الكيك" (Search how to make cake)
-  - "شغل سبوتيفاي" (Play Spotify)
-  - "1" (Select item #1 from previous results)
+  - "راجع هذا الملف" (Review this file - Dev mode)
+  - "شغّل الاختبارات" (Run tests - Dev mode)
+  - "صلّح الخطأ" (Fix the error - Dev mode)
+  - "1" (اختيار العنصر رقم 1)
 
-The assistant supports Arabic, Turkish, and English.
+هذا المساعد يدعم اللغة العربية بشكل أساسي.
 `);
     }
     showMemoryInsights() {
