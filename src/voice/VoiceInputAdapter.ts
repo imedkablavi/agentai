@@ -1,13 +1,16 @@
+export type VoiceLanguage = 'ar' | 'tr' | 'en';
+
 export interface VoiceInputAdapter {
-  listen(): Promise<string>;
-  detect_language(text: string): 'ar' | 'tr' | 'en';
+  transcribe(audioFilePath: string): Promise<string>;
+  detectLanguage(text: string): VoiceLanguage;
 }
 
 export class DummyVoiceInputAdapter implements VoiceInputAdapter {
-  async listen(): Promise<string> {
+  async transcribe(): Promise<string> {
     return '';
   }
-  detect_language(text: string): 'ar' | 'tr' | 'en' {
+
+  detectLanguage(text: string): VoiceLanguage {
     const arabic = /[\u0600-\u06FF]/.test(text);
     const turkish = /[\u00E7\u011F\u0130\u0131\u00D6\u00F6\u015E\u015F\u00DC\u00FC]/.test(text);
     if (arabic) return 'ar';

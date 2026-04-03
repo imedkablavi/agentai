@@ -11,8 +11,6 @@ export class VoiceController {
     const text = await this.input.listen(audioFilePath);
     if (!text) return;
     const result = await this.assistant.processInput(text);
-    // One sentence only in voice mode
-    await this.output.speak(result.voiceResponse, prefs.language);
+    await this.output.speak(result.voiceResponse, prefs.language, prefs.voice_response_mode || 'short');
   }
 }
-

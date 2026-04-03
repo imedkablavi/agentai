@@ -23,6 +23,7 @@ export class MemoryManager implements IMemoryManager {
       language: 'ar',
       browser: 'chrome',
       voice_mode: true,
+      voice_response_mode: 'short',
       auto_execute_threshold: 0.85,
       confirmation_required: true
     };
