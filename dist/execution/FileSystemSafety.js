@@ -105,6 +105,8 @@ class FileSystemSafety {
     async applyPatch(targetPath, newContent) {
         if (!this.isSafePath(targetPath))
             return { success: false };
+        if (!newContent || !newContent.trim())
+            return { success: false };
         const resolved = path.resolve(this.workspaceRoot, targetPath);
         let backupPath;
         // Backup first

@@ -36,24 +36,29 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.VoiceInput = void 0;
 const child_process_1 = require("child_process");
 const util_1 = require("util");
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+const VoiceInputAdapter_1 = require("./VoiceInputAdapter");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 class VoiceInput {
-    constructor(whisperCmd = 'python -m whisper') {
+    constructor(provider = new VoiceInputAdapter_1.DummyVoiceInputAdapter(), whisperCmd = 'python -m whisper') {
+        this.provider = provider;
         this.whisperCmd = whisperCmd;
     }
     async listen(audioFilePath) {
         if (!audioFilePath)
             return '';
+        const providerText = await this.provider.transcribe(audioFilePath);
+        if (providerText.trim())
+            return providerText.trim();
         try {
-            const { stdout } = await execAsync(`${this.whisperCmd} "${audioFilePath}" --language auto --task transcribe --output_format txt`);
-            // stdout may contain logs; result likely saved to file; attempt to read from stdout or fallback
-            const fs = await Promise.resolve().then(() => __importStar(require('fs')));
-            const path = await Promise.resolve().then(() => __importStar(require('path')));
-            const base = path.default.parse(audioFilePath).name;
-            const dir = path.default.parse(audioFilePath).dir;
-            const txtPath = path.default.join(dir, `${base}.txt`);
-            if (fs.default.existsSync(txtPath)) {
-                const content = fs.default.readFileSync(txtPath, 'utf8');
+            const escapedPath = audioFilePath.replace(/"/g, '\\"');
+            const { stdout } = await execAsync(`${this.whisperCmd} "${escapedPath}" --language auto --task transcribe --output_format txt`);
+            const base = path.parse(audioFilePath).name;
+            const dir = path.parse(audioFilePath).dir;
+            const txtPath = path.join(dir, `${base}.txt`);
+            if (fs.existsSync(txtPath)) {
+                const content = fs.readFileSync(txtPath, 'utf8');
                 return String(content || '').trim();
             }
             return stdout?.trim() || '';

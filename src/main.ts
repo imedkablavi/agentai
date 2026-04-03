@@ -2,6 +2,9 @@
 
 import { AIAssistant } from './AIAssistant';
 import { ConsoleVoiceOutputAdapter } from './voice/VoiceOutputAdapter';
+import { VoiceInput } from './voice/VoiceInput';
+import { VoiceOutput } from './voice/VoiceOutput';
+import { VoiceController } from './voice/VoiceController';
 import * as readline from 'readline';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -11,9 +14,11 @@ class WindowsAIAssistantCLI {
   private rl: readline.Interface;
   private sessionLog: string[] = [];
   private voice = new ConsoleVoiceOutputAdapter();
+  private voiceController: VoiceController;
 
   constructor() {
     this.assistant = new AIAssistant();
+    this.voiceController = new VoiceController(this.assistant, new VoiceInput(), new VoiceOutput());
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -63,6 +68,13 @@ class WindowsAIAssistantCLI {
         return;
       }
 
+      if (trimmedInput.toLowerCase().startsWith('ptt ') || trimmedInput.startsWith('تكلم ')) {
+        const audioPath = trimmedInput.replace(/^ptt\s+/i, '').replace(/^تكلم\s+/, '').trim();
+        await this.voiceController.processOnce(audioPath);
+        this.rl.prompt();
+        return;
+      }
+
       await this.processUserInput(trimmedInput);
       this.rl.prompt();
     });
@@ -88,8 +100,7 @@ class WindowsAIAssistantCLI {
       console.log(`🤖 Assistant: ${result.response}`);
       const prefs = this.assistant.getPreferences();
       if (prefs.voice_mode) {
-        // Voice mode: short response only
-        const short = result.voiceResponse.split(/\.|!|؟/)[0];
+        const short = prefs.voice_response_mode === 'long' ? result.voiceResponse : result.voiceResponse.split(/\.|!|؟/)[0];
         await this.voice.speak(short, prefs.language);
       }
       console.log(`⏱️  Response time: ${responseTime}ms`);
@@ -119,6 +130,8 @@ class WindowsAIAssistantCLI {
   memory      - عرض معلومات الذاكرة (Memory insights)
   context     - عرض السياق الحالي (Current context)
   clear       - مسح سياق المحادثة (Clear context)
+  ptt <path>  - Push-to-talk audio input
+  تكلم <path> - إدخال صوتي من ملف
   exit/quit   - إغلاق البرنامج (Exit)
 
 أمثلة (Examples):

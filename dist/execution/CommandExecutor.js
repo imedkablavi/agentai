@@ -85,6 +85,12 @@ class CommandExecutor {
                     return await this.execOpenApp(command);
                 case 'close_application':
                     return await this.execCloseApp(command);
+                case 'open_file':
+                    return await this.execOpenFile(command);
+                case 'read_file':
+                    return await this.execReadFile(command);
+                case 'summarize_logs':
+                    return await this.execSummarizeLogs(command);
                 case 'web_search':
                     return await this.execWebSearch(command);
                 case 'youtube_search':
@@ -113,7 +119,10 @@ class CommandExecutor {
             return { success: false, error_detail: this.error('unknown', true, e?.message || 'Error', true) };
         }
         finally {
-            this.context.updateContext({ awaiting_confirmation: false });
+            const current = this.context.getContext();
+            if (!current.awaiting_confirmation || !current.dev_patch_content || !current.dev_patch_target) {
+                this.context.updateContext({ awaiting_confirmation: false });
+            }
             this.context.setState('IDLE');
         }
     }
@@ -134,6 +143,59 @@ class CommandExecutor {
         catch {
             return { success: false, error_detail: this.error('permission', true, 'Failed to open application', true) };
         }
+    }
+    async execOpenFile(command) {
+        const target = command.target || '';
+        if (!target) {
+            return { success: false, error_detail: this.error('context', true, 'لم يتم تحديد الملف.', false) };
+        }
+        const { content, error } = await this.fsSafety.readFile(target);
+        if (error) {
+            return { success: false, error_detail: this.error('permission', true, error, false) };
+        }
+        return {
+            success: true,
+            data: { action: 'open_file', target, preview: content.slice(0, 1200) }
+        };
+    }
+    async execReadFile(command) {
+        const target = command.target || '';
+        if (!target) {
+            return { success: false, error_detail: this.error('context', true, 'لم يتم تحديد الملف.', false) };
+        }
+        const { content, error } = await this.fsSafety.readFile(target);
+        if (error) {
+            return { success: false, error_detail: this.error('permission', true, error, false) };
+        }
+        return {
+            success: true,
+            data: { action: 'read_file', target, result: content.slice(0, 4000) }
+        };
+    }
+    async execSummarizeLogs(command) {
+        const explicitPath = command.target || '';
+        const candidates = explicitPath
+            ? [explicitPath]
+            : ['.agent_dev.log', '.agent_action.log', 'logs/latest.log', 'logs/error.log'];
+        for (const target of candidates) {
+            const { content, error } = await this.fsSafety.readFile(target);
+            if (error)
+                continue;
+            const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+            const tail = lines.slice(-50);
+            const errorCount = tail.filter(l => /error|failed|failure|exception|خطأ|فشل/i.test(l)).length;
+            const warnCount = tail.filter(l => /warn|warning|تحذير/i.test(l)).length;
+            const summary = `الملف: ${target}\n` +
+                `آخر السطور المفحوصة: ${tail.length}\n` +
+                `أخطاء: ${errorCount}\n` +
+                `تحذيرات: ${warnCount}\n` +
+                `آخر أحداث:\n${tail.slice(-10).join('\n')}`;
+            return { success: true, data: { action: 'summarize_logs', target, result: summary } };
+        }
+        return {
+            success: false,
+            error_detail: this.error('context', true, 'لا يوجد ملف سجل قابل للقراءة ضمن المسارات الآمنة.', false)
+        };
     }
     async execCloseApp(command) {
         const app = command.target || command.params?.application;
@@ -279,12 +341,12 @@ class CommandExecutor {
         try {
             const { stdout, stderr } = await execAsync(testCmdStr, { timeout: 60000, cwd: scopedCwd });
             this.logDevAction('dev_test', target || 'project', 'success', Date.now() - start, `Scope: ${scopedCwd}`);
-            return { success: true, data: { action: 'dev_test', result: stdout.substring(0, 1000) } };
+            return { success: true, data: { action: 'dev_test', target: target || scopedCwd, result: stdout.substring(0, 1000) } };
         }
         catch (e) {
             const output = e.stderr || e.stdout || e.message || 'Unknown test error';
             this.logDevAction('dev_test', target || 'project', 'failure', Date.now() - start, output);
-            return { success: true, data: { action: 'dev_test', result: `ملاحظة: فشل الاختبار في النطاق (${scopedCwd}). النتيجة:\n` + output.substring(0, 1000) } };
+            return { success: false, error_detail: this.error('unknown', true, `فشل الاختبارات في النطاق (${scopedCwd}).\n${output.substring(0, 1000)}`, true) };
         }
     }
     async execDevFix(command) {
@@ -341,7 +403,7 @@ class CommandExecutor {
         const { content, error } = await this.fsSafety.readFile(target);
         if (error)
             return { success: false, error_detail: this.error('permission', true, error, false) };
-        const errorContextHistory = ctx.conversation_history.slice(-3).join('\n');
+        const errorContextHistory = (ctx.conversation_history || []).slice(-3).join('\n');
         let newContent = '';
         let attempt = 0;
         const maxAttempts = 3;
@@ -353,11 +415,18 @@ class CommandExecutor {
         while (attempt < maxAttempts) {
             try {
                 newContent = await this.patchGen.proposeFix(content, contextMemory, target);
-                let tempPath = target + `.temp-${Date.now()}`;
+                const tempPath = target + `.temp-${Date.now()}`;
                 const tempSuccess = await this.fsSafety.applyPatch(tempPath, newContent);
                 if (tempSuccess.success) {
                     const syntaxValid = await this.validator.validateFile(tempPath);
-                    this.fsSafety.rollback(tempPath, tempSuccess.backupPath);
+                    if (tempSuccess.backupPath) {
+                        this.fsSafety.rollback(tempPath, tempSuccess.backupPath);
+                    }
+                    else {
+                        const fullTempPath = path.resolve(process.cwd(), tempPath);
+                        if (fs.existsSync(fullTempPath))
+                            fs.unlinkSync(fullTempPath);
+                    }
                     if (syntaxValid.success) {
                         fallbackSyntaxError = '';
                         break;
@@ -401,7 +470,7 @@ class CommandExecutor {
             awaiting_confirmation: true,
             awaiting_followup: true
         });
-        this.context.setLastAction('confirm_action');
+        this.context.setLastAction('dev_fix');
         this.context.setState('AWAITING_CONFIRMATION');
         this.logDevAction('dev_fix_preview', target, 'success', Date.now() - start, `Risk: ${riskAnalysis.level}, Attempts: ${attempt + 1}, Confidence: ${confidenceScore}, Impacted: ${riskAnalysis.impactedScopes.length}`);
         // Arabic explanation dynamically mapping risk bounds & confidence

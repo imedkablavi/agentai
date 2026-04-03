@@ -147,10 +147,13 @@ export class AIAssistant {
       // Step 7: Execute via CommandExecutor
       let command: ExecutionCommand = await skill.execute(intent, context);
       if (intent.name === 'confirm_action' && context.awaiting_confirmation) {
-        this.contextManager.confirmPending();
-        // Enable last created scheduled task
-        const tasks = this.scheduler.listTasks();
-        if (tasks.length > 0) this.scheduler.enableTask(tasks[tasks.length - 1].id);
+        const isDevPatchPending = Boolean(context.dev_patch_target && context.dev_patch_content);
+        if (!isDevPatchPending) {
+          this.contextManager.confirmPending();
+          // Enable last created scheduled task
+          const tasks = this.scheduler.listTasks();
+          if (tasks.length > 0) this.scheduler.enableTask(tasks[tasks.length - 1].id);
+        }
       }
       const skillResult = await this.executor.execute(command, intent.language as 'ar' | 'tr' | 'en');
       

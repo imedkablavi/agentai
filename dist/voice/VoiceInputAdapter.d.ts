@@ -1,9 +1,10 @@
+export type VoiceLanguage = 'ar' | 'tr' | 'en';
 export interface VoiceInputAdapter {
-    listen(): Promise<string>;
-    detect_language(text: string): 'ar' | 'tr' | 'en';
+    transcribe(audioFilePath: string): Promise<string>;
+    detectLanguage(text: string): VoiceLanguage;
 }
 export declare class DummyVoiceInputAdapter implements VoiceInputAdapter {
-    listen(): Promise<string>;
-    detect_language(text: string): 'ar' | 'tr' | 'en';
+    transcribe(): Promise<string>;
+    detectLanguage(text: string): VoiceLanguage;
 }
 //# sourceMappingURL=VoiceInputAdapter.d.ts.map

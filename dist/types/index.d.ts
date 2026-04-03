@@ -45,6 +45,7 @@ export interface PreferenceMemory {
     language: 'ar' | 'tr' | 'en';
     browser: string;
     voice_mode: boolean;
+    voice_response_mode?: 'short' | 'long';
     auto_execute_threshold: number;
     confirmation_required: boolean;
 }

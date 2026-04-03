@@ -31,7 +31,6 @@
     "lodash": "^4.17.21",
     "node-record-lpcm16": "^1.0.1",
     "puppeteer": "^21.0.0",
-    "speaker": "^0.5.4",
     "uuid": "^9.0.0",
     "winston": "^3.11.0",
     "ws": "^8.14.0"

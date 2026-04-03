@@ -12,6 +12,9 @@ export declare class CommandExecutor {
     private logDevAction;
     execute(command: ExecutionCommand, intentLanguage: 'ar' | 'tr' | 'en'): Promise<SkillResult>;
     private execOpenApp;
+    private execOpenFile;
+    private execReadFile;
+    private execSummarizeLogs;
     private execCloseApp;
     private execWebSearch;
     private execYouTubeSearch;

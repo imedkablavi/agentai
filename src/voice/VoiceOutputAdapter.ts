@@ -5,8 +5,7 @@ export interface VoiceOutputAdapter {
 }
 
 export class ConsoleVoiceOutputAdapter implements VoiceOutputAdapter {
-  async speak(text: string): Promise<void> {
+  async speak(text: string, _language: VoiceLanguage): Promise<void> {
     console.log(`🔊 ${text}`);
   }
 }
-

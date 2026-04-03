@@ -83,7 +83,8 @@ class ValidationEngine {
         return results;
     }
     getImpactedScopes(filePath) {
-        const { root, pkg } = this.getNearestPackageInfo(filePath);
+        const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.resolve(this.workspaceRoot, filePath);
+        const { root, pkg } = this.getNearestPackageInfo(absoluteFilePath);
         if (!pkg?.name)
             return [root];
         const currentName = pkg.name;
@@ -92,14 +93,15 @@ class ValidationEngine {
         impacted.add(root);
         // Find any package that depends on currentName
         for (const p of allPkgs) {
-            if (p.deps.includes(currentName)) {
+            if (p.dir !== root && p.deps.includes(currentName)) {
                 impacted.add(p.dir);
             }
         }
         return Array.from(impacted);
     }
     getNearestPackageInfo(filePath) {
-        let currentDir = path.dirname(path.resolve(this.workspaceRoot, filePath));
+        const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.resolve(this.workspaceRoot, filePath);
+        let currentDir = path.dirname(absoluteFilePath);
         while (currentDir.startsWith(this.workspaceRoot)) {
             const pkgPath = path.join(currentDir, 'package.json');
             if (fs.existsSync(pkgPath)) {

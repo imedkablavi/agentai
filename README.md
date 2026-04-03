@@ -1,8 +1,8 @@
-# Windows AI Assistant V2 🤖
+# AGENTai
 
-An intelligent personal assistant for Windows with advanced memory management, context awareness, and multi-language support.
+A personal + developer assistant with Arabic-first commands, safe execution, and voice support.
 
-## 🌟 Features
+## Features
 
 ### Core Architecture
 - **Smart Memory System**: Short-term, long-term, and preference memory
@@ -18,6 +18,7 @@ An intelligent personal assistant for Windows with advanced memory management, c
 
 ### Built-in Skills
 - **Application Management**: Open/close applications (Chrome, Firefox, Office, etc.)
+- **Personal Assistant Actions**: Open files, read text files, summarize logs
 - **Web Search**: Multi-engine search (DuckDuckGo, Bing, Yahoo)
 - **YouTube Integration**: Search and play videos
 - **System Commands**: Shutdown, restart, lock screen (with safety measures)
@@ -39,6 +40,12 @@ npm run build
 npm run dev
 ```
 
+If your environment cannot build optional native dependencies:
+
+```bash
+npm install --omit=optional
+```
+
 ### Basic Usage
 ```bash
 # Start the assistant
@@ -58,6 +65,8 @@ dور لي فيديوهات عن البرمجة   # Find videos about programmin
 - `memory` - Show memory insights
 - `context` - Show current context
 - `clear` - Clear conversation context
+- `ptt <path>` - Push-to-talk from audio file
+- `تكلم <path>` - Push-to-talk from audio file (Arabic command)
 - `exit/quit` - Exit the assistant
 
 ## 🧠 Architecture

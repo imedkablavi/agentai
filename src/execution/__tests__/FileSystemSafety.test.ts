@@ -37,6 +37,8 @@ describe('FileSystemSafety', () => {
   it('blocks reading from protected node_modules directory', async () => {
     expect(fsSafety.isSafePath('node_modules/test.js')).toBe(false);
     expect(fsSafety.isSafePath('src/node_modules/test.js')).toBe(false);
+    expect(fsSafety.isSafePath('.env')).toBe(false);
+    expect(fsSafety.isSafePath('config/.env.local')).toBe(false);
   });
 
   it('creates backup and rolls back correctly', async () => {

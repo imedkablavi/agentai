@@ -74,6 +74,7 @@ export class FileSystemSafety {
 
   async applyPatch(targetPath: string, newContent: string): Promise<{ success: boolean; backupPath?: string }> {
     if (!this.isSafePath(targetPath)) return { success: false };
+    if (!newContent || !newContent.trim()) return { success: false };
     const resolved = path.resolve(this.workspaceRoot, targetPath);
     
     let backupPath: string | undefined;

@@ -76,7 +76,22 @@ class IntentEngine {
                 'dev_fix': [
                     /صلّح\s+الخطأ/i,
                     /صلح\s+لمشكلة/i,
-                    /أصلح\s+(.+)/i
+                    /أصلح\s+(.+)/i,
+                    /صلّح\s+المشكلة/i
+                ],
+                'open_file': [
+                    /افتح\s+الملف\s+(.+)/i,
+                    /افتح\s+ملف\s+(.+)/i
+                ],
+                'read_file': [
+                    /اقرأ\s+الملف\s+(.+)/i,
+                    /اقرأ\s+لي\s+الخطأ/i,
+                    /اقرأ\s+(.+)/i
+                ],
+                'summarize_logs': [
+                    /لخّص\s+السجلات/i,
+                    /لخص\s+اللوغ/i,
+                    /اعرض\s+الاخطاء/i
                 ]
             },
             tr: {
@@ -208,6 +223,17 @@ class IntentEngine {
                     /fix\s+bug/i,
                     /fix\s+error/i,
                     /fix\s+(.+)/i
+                ],
+                'open_file': [
+                    /open\s+file\s+(.+)/i
+                ],
+                'read_file': [
+                    /read\s+file\s+(.+)/i,
+                    /read\s+the\s+error/i
+                ],
+                'summarize_logs': [
+                    /summarize\s+logs?/i,
+                    /show\s+errors?/i
                 ]
             }
         };
@@ -308,6 +334,12 @@ class IntentEngine {
             const q = parts[parts.length - 1]?.trim();
             if (q)
                 entities.query = q;
+        }
+        if (['open_file', 'read_file', 'summarize_logs', 'dev_inspect', 'dev_test', 'dev_fix'].includes(intent.name)) {
+            const pathMatch = text.match(/([A-Za-z0-9_./\\-]+\.[A-Za-z0-9]+)/);
+            if (pathMatch) {
+                entities.file_path = pathMatch[1];
+            }
         }
         return {
             ...intent,
