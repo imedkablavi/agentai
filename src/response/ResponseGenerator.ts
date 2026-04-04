@@ -12,6 +12,7 @@ export class ResponseGenerator implements IResponseGenerator {
         application: 'تم فتح {application} بنجاح.',
         system: 'تم تنفيذ الأمر "{command}" بنجاح.',
         memory: 'تم حفظ الذاكرة بنجاح.',
+        recall_memory: 'إليك ما أعرفه عنك:\nالتفضيلات: لغة={language}, متصفح={browser}\nالعادات: {habits}\nالأنماط الأخيرة: {patterns}',
         selection: 'تم اختيار العنصر رقم {index} بنجاح.',
         dev_inspect: 'تم فحص الكود {target}. النتيجة: {result}',
         dev_test: 'تم تشغيل الاختبارات بنجاح. النتيجة: {result}',
@@ -19,7 +20,9 @@ export class ResponseGenerator implements IResponseGenerator {
         dev_fix_preview: 'تم اقتراح إصلاح لـ {target}:\n{result}',
         open_file: 'تم فتح الملف {target}.',
         read_file: 'هذا محتوى الملف {target}:\n{result}',
-        summarize_logs: 'ملخص السجلات من {target}:\n{result}'
+        summarize_logs: 'ملخص السجلات من {target}:\n{result}',
+        schedule_task: 'تم جدولة المهمة بنجاح عند {at} يومياً.',
+        stop_tasks: 'تم إيقاف جميع المهام المجدولة.'
       },
       error: {
         general: 'حصل خطأ: {error}',
@@ -39,7 +42,10 @@ export class ResponseGenerator implements IResponseGenerator {
         dev_fix_preview: 'هل تريد تطبيق هذا الإصلاح؟',
         open_file: 'هل تريد قراءة الملف بالكامل؟',
         read_file: 'هل تريد مراجعة ملف آخر؟',
-        summarize_logs: 'هل تريد أن أراجع ملف سجل آخر؟'
+        summarize_logs: 'هل تريد أن أراجع ملف سجل آخر؟',
+        schedule_task: 'هل تريد إضافة مهمة أخرى أو تعديل الجدول الزمني؟',
+        stop_tasks: 'هل تريد إنشاء جدول مهام جديد؟',
+        recall_memory: 'هل تريد تحديث تفضيلاتك أو حذف عادة معينة؟'
       }
     },
     tr: {
@@ -48,6 +54,7 @@ export class ResponseGenerator implements IResponseGenerator {
         application: '{application} başarıyla açıldı.',
         system: '"{command}" komutu başarıyla çalıştırıldı.',
         memory: 'Bellek başarıyla kaydedildi.',
+        recall_memory: 'Seni hakkında bildiklerim:\nTercihler: dil={language}, tarayıcı={browser}\nAlışkanlıklar: {habits}\nYakın desenler: {patterns}',
         selection: '{index} numaralı öğe başarıyla seçildi.',
         dev_inspect: 'Kod incelendi {target}. Sonuç: {result}',
         dev_test: 'Testler başarıyla tamamlandı. Sonuç: {result}',
@@ -55,7 +62,9 @@ export class ResponseGenerator implements IResponseGenerator {
         dev_fix_preview: '{target} için düzeltme önerildi:\n{result}',
         open_file: '{target} dosyası açıldı.',
         read_file: '{target} dosya içeriği:\n{result}',
-        summarize_logs: '{target} için log özeti:\n{result}'
+        summarize_logs: '{target} için log özeti:\n{result}',
+        schedule_task: 'Görev başarıyla {at} saatinde günlük olarak zamanlandı.',
+        stop_tasks: 'Tüm zamanlanmış görevler durduruldu.'
       },
       error: {
         general: 'Hata oluştu: {error}',
@@ -75,7 +84,10 @@ export class ResponseGenerator implements IResponseGenerator {
         dev_fix_preview: 'Bu düzeltmeyi uygulamak ister misin?',
         open_file: 'Dosyanın tamamını okumamı ister misin?',
         read_file: 'Başka bir dosya okumamı ister misin?',
-        summarize_logs: 'Başka bir log dosyasını incelememi ister misin?'
+        summarize_logs: 'Başka bir log dosyasını incelememi ister misin?',
+        schedule_task: 'Başka bir görev eklemek veya zamanlamayı düzenlemek ister misin?',
+        stop_tasks: 'Yeni bir görev zamanlaması oluşturmak ister misin?',
+        recall_memory: 'Tercihlerini güncellemek veya belirli bir alışkanlığı silmek ister misin?'
       }
     },
     en: {
@@ -84,6 +96,7 @@ export class ResponseGenerator implements IResponseGenerator {
         application: '{application} opened successfully.',
         system: 'Command "{command}" executed successfully.',
         memory: 'Memory saved successfully.',
+        recall_memory: "Here's what I know about you:\nPreferences: language={language}, browser={browser}\nHabits: {habits}\nRecent patterns: {patterns}",
         selection: 'Item number {index} selected successfully.',
         dev_inspect: 'Inspected {target}. Result: {result}',
         dev_test: 'Tests executed. Result: {result}',
@@ -91,7 +104,9 @@ export class ResponseGenerator implements IResponseGenerator {
         dev_fix_preview: 'Proposed fix for {target}:\n{result}',
         open_file: 'Opened file {target}.',
         read_file: 'File content for {target}:\n{result}',
-        summarize_logs: 'Log summary from {target}:\n{result}'
+        summarize_logs: 'Log summary from {target}:\n{result}',
+        schedule_task: 'Task scheduled successfully at {at} daily.',
+        stop_tasks: 'All scheduled tasks have been stopped.'
       },
       error: {
         general: 'An error occurred: {error}',
@@ -111,7 +126,10 @@ export class ResponseGenerator implements IResponseGenerator {
         dev_fix_preview: 'Do you want to apply this fix?',
         open_file: 'Do you want me to read the full file?',
         read_file: 'Do you want to read another file?',
-        summarize_logs: 'Do you want me to inspect another log file?'
+        summarize_logs: 'Do you want me to inspect another log file?',
+        schedule_task: 'Would you like to add another task or modify the schedule?',
+        stop_tasks: 'Would you like to create a new task schedule?',
+        recall_memory: 'Would you like to update your preferences or remove a habit?'
       }
     }
   };
@@ -195,7 +213,19 @@ export class ResponseGenerator implements IResponseGenerator {
   private generateSuccessResponse(result: SkillResult, templates: any): string {
     const actionType = this.determineActionType(result);
     const template = templates[actionType] || templates.general;
-    
+
+    if (actionType === 'recall_memory' && result.data) {
+      const prefs = result.data.preferences || {};
+      const habits = (result.data.habits as any[] || []).map((h: any) => h.description).join('; ') || '-';
+      const patterns = (result.data.recent_patterns as any[] || []).map((p: any) => `${p.description} (×${p.frequency})`).join('; ') || '-';
+      return this.formatTemplate(template, {
+        language: prefs.language || '-',
+        browser: prefs.browser || '-',
+        habits,
+        patterns
+      });
+    }
+
     return this.formatTemplate(template, result.data);
   }
 
@@ -211,6 +241,9 @@ export class ResponseGenerator implements IResponseGenerator {
     if (result.data?.application) return 'application';
     if (result.data?.command) return 'system';
     if (result.data?.action === 'memory_stored') return 'memory';
+    if (result.data?.action === 'recall_memory') return 'recall_memory';
+    if (result.data?.action === 'schedule_task') return 'schedule_task';
+    if (result.data?.action === 'stop_tasks') return 'stop_tasks';
     if (result.data?.action === 'opened' && result.data?.index) return 'selection';
     if (result.data?.action === 'dev_inspect') return 'dev_inspect';
     if (result.data?.action === 'dev_test') return 'dev_test';

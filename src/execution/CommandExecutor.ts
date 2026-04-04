@@ -79,6 +79,8 @@ export class CommandExecutor {
           return await this.execSelection(command);
         case 'store_memory':
           return await this.execStoreMemory(command);
+        case 'recall_memory':
+          return await this.execRecallMemory(command);
         case 'dev_inspect':
           return await this.execDevInspect(command);
         case 'dev_test':
@@ -269,6 +271,34 @@ export class CommandExecutor {
     });
     return { success: true, data: { action: 'memory_stored', content } };
   }
+
+  private async execRecallMemory(_command: ExecutionCommand): Promise<SkillResult> {
+    const memories = this.memory.getLongTermMemories();
+    const prefs = this.memory.getPreferences();
+    const stm = this.memory.getShortTermMemory();
+
+    const habits = memories.filter(m => m.type === 'habit' && m.frequency >= 3);
+    const patterns = memories
+      .filter(m => {
+        const days = (Date.now() - new Date(m.last_occurrence).getTime()) / (1000 * 60 * 60 * 24);
+        return days <= 7;
+      })
+      .sort((a, b) => b.frequency - a.frequency)
+      .slice(0, 5);
+
+    return {
+      success: true,
+      data: {
+        action: 'recall_memory',
+        short_term: stm,
+        habits,
+        recent_patterns: patterns,
+        preferences: prefs,
+        total_memories: memories.length
+      }
+    };
+  }
+
 
   private async execDevInspect(command: ExecutionCommand): Promise<SkillResult> {
     const start = Date.now();
@@ -501,11 +531,13 @@ export class CommandExecutor {
 
   private async searchMulti(query: string): Promise<Array<{ title: string; url: string; snippet: string; source: string }>> {
     const results: any[] = [];
-    try {
-      const ddg = await this.ddg(query);
-      const bing = await this.bing(query);
-      results.push(...ddg, ...bing);
-    } catch {}
+    const searches = [
+      this.ddg(query).catch(() => []),
+      this.bing(query).catch(() => []),
+      this.yahoo(query).catch(() => [])
+    ];
+    const settled = await Promise.all(searches);
+    for (const r of settled) results.push(...r);
     return results;
   }
 
@@ -537,6 +569,22 @@ export class CommandExecutor {
       const href = a.attr('href') || '';
       const snippet = cap.text().trim();
       if (title && href) out.push({ title, url: href, snippet, source: 'Bing' });
+    });
+    return out.slice(0, 5);
+  }
+
+  private async yahoo(query: string): Promise<any[]> {
+    const url = `https://search.yahoo.com/search?p=${encodeURIComponent(query)}`;
+    const res = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 });
+    const $ = load(res.data);
+    const out: any[] = [];
+    $('div.Sr').each((_, el) => {
+      const a = $(el).find('h3.title a');
+      const s = $(el).find('div.compText p');
+      const title = a.text().trim();
+      const href = a.attr('href') || '';
+      const snippet = s.text().trim();
+      if (title && href) out.push({ title, url: href, snippet, source: 'Yahoo' });
     });
     return out.slice(0, 5);
   }
