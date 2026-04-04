@@ -64,11 +64,13 @@ export class IntentEngine implements IIntentEngine {
         /احفظ\s+(.+)/i,
         /من\s+الآن\s+فصاعدًا\s+(.+)/i
       ],
-      'dev_inspect': [
-        /راجع\s+هذا\s+الملف/i,
-        /افتح\s+المشروع/i,
-        /تفحص\s+(.+)/i,
-        /راجع\s+(.+)/i
+      'recall_memory': [
+        /ايش\s+تعرف\s+عني/i,
+        /شو\s+تعرف\s+عني/i,
+        /ماذا\s+تتذكر/i,
+        /قل\s+لي\s+ذاكرتك/i,
+        /اعرض\s+الذاكرة/i,
+        /شو\s+في\s+الذاكرة/i
       ],
       'dev_test': [
         /شغّل\s+الاختبارات/i,
@@ -138,10 +140,11 @@ export class IntentEngine implements IIntentEngine {
         /kaydet\s+(.+)/i,
         /bundan\s+sonra\s+(.+)/i
       ],
-      'dev_inspect': [
-        /kodu\s+incele/i,
-        /projeyi\s+aç/i,
-        /incele\s+(.+)/i
+      'recall_memory': [
+        /beni\s+ne\s+biliyorsun/i,
+        /ne\s+hatırlıyorsun/i,
+        /belleğimi\s+göster/i,
+        /bellekte\s+ne\s+var/i
       ],
       'dev_test': [
         /testleri\s+çalıştır/i,
@@ -210,12 +213,13 @@ export class IntentEngine implements IIntentEngine {
         /save\s+(.+)/i,
         /from\s+now\s+on\s+(.+)/i
       ],
-      'dev_inspect': [
-        /inspect\s+code/i,
-        /review\s+this\s+file/i,
-        /open\s+project/i,
-        /inspect\s+(.+)/i,
-        /review\s+(.+)/i
+      'recall_memory': [
+        /what\s+do\s+you\s+know\s+about\s+me/i,
+        /what\s+do\s+you\s+remember/i,
+        /show\s+my\s+memory/i,
+        /show\s+memories/i,
+        /recall\s+memory/i,
+        /what's\s+in\s+memory/i
       ],
       'dev_test': [
         /run\s+tests?/i,
@@ -421,7 +425,7 @@ export class IntentEngine implements IIntentEngine {
 
   private isContextRequired(intentName: string): boolean {
     const contextRequiredIntents = [
-      'select_item', 'continue_action', 'memory_command'
+      'select_item', 'continue_action', 'memory_command', 'recall_memory'
     ];
     
     return contextRequiredIntents.some(intent => intentName.includes(intent));
