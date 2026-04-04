@@ -28,9 +28,6 @@ export declare class CommandExecutor {
     private confirmationMessage;
     private confirmKeyword;
     private fallbackError;
-    private riskLevelText;
-    private confidenceLevelText;
-    private msg;
     private searchMulti;
     private ddg;
     private bing;
