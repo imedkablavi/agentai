@@ -368,12 +368,12 @@ export class CommandExecutor {
              };
           }
 
-          this.context.updateContext({ dev_patch_content: undefined, dev_patch_target: undefined, awaiting_confirmation: false });
-          this.context.setLastAction('');
-
           let resultMsg = this.msg(lang, 'patch_applied_success');
           const runDiff = await this.gitSafety.getGitDiff(targetPath);
           if (runDiff) resultMsg += `\n\n**Git Diff:**\n\`\`\`diff\n${runDiff.substring(0, 300)}...\n\`\`\``;
+
+          this.context.updateContext({ dev_patch_content: undefined, dev_patch_target: undefined, awaiting_confirmation: false });
+          this.context.setLastAction('');
 
           this.logDevAction('dev_fix_apply', targetPath, 'success', Date.now() - start, semanticCheck.diff);
           return { success: true, data: { action: 'dev_fix', target: targetPath, result: resultMsg } };
@@ -610,7 +610,7 @@ export class CommandExecutor {
         cancel: 'Cancel'
       }
     };
-    return messages[lang]?.[key] || messages.ar[key] || key;
+    return messages[lang]?.[key] || messages.en[key] || messages.ar[key] || key;
   }
 
   private async searchMulti(query: string): Promise<Array<{ title: string; url: string; snippet: string; source: string }>> {

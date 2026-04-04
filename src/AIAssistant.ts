@@ -144,8 +144,6 @@ export class AIAssistant {
         };
       }
 
-      // Step 7: Execute via CommandExecutor
-      let command: ExecutionCommand = await skill.execute(intent, context);
       if (intent.name === 'confirm_action' && !context.awaiting_confirmation) {
         const msg = intent.language === 'ar' ? 'لا يوجد إجراء معلّق للتأكيد.' : intent.language === 'tr' ? 'Onaylanacak bekleyen bir işlem yok.' : 'There is no pending action to confirm.';
         return {
@@ -156,6 +154,9 @@ export class AIAssistant {
           suggestedActions: []
         };
       }
+
+      // Step 7: Execute via CommandExecutor
+      let command: ExecutionCommand = await skill.execute(intent, context);
       if (intent.name === 'confirm_action' && context.awaiting_confirmation) {
         const isDevPatchPending = Boolean(context.dev_patch_target && context.dev_patch_content);
         if (!isDevPatchPending) {

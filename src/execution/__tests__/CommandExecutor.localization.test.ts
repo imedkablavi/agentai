@@ -59,5 +59,6 @@ describe('CommandExecutor localization and dev_fix state safety', () => {
     expect(updatedCtx.dev_patch_target).toBe('app.ts');
     expect(updatedCtx.dev_patch_content).toBe('const x = 1;');
     expect(updatedCtx.awaiting_confirmation).toBe(true);
+    expect((executor as any).fsSafety.rollback).toHaveBeenCalledWith('app.ts', 'app.ts.backup');
   });
 });

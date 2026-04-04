@@ -6,7 +6,7 @@ class DeveloperSkill {
         this.name = 'DeveloperSkill';
         this.supported_intents = ['dev_inspect', 'dev_fix', 'dev_test', 'confirm_action'];
     }
-    validate(intent, context) {
+    validate(intent, _context) {
         return this.supported_intents.includes(intent.name);
     }
     async execute(intent, context) {
