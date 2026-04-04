@@ -4,7 +4,7 @@ export class DeveloperSkill implements Skill {
   name = 'DeveloperSkill';
   supported_intents = ['dev_inspect', 'dev_fix', 'dev_test', 'confirm_action'];
 
-  validate(intent: Intent, context: ConversationContext): boolean {
+  validate(intent: Intent, _context: ConversationContext): boolean {
     return this.supported_intents.includes(intent.name);
   }
 
