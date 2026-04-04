@@ -61,11 +61,11 @@ export class CommandExecutor {
         case 'close_application':
           return await this.execCloseApp(command);
         case 'open_file':
-          return await this.execOpenFile(command);
+          return await this.execOpenFile(command, intentLanguage);
         case 'read_file':
-          return await this.execReadFile(command);
+          return await this.execReadFile(command, intentLanguage);
         case 'summarize_logs':
-          return await this.execSummarizeLogs(command);
+          return await this.execSummarizeLogs(command, intentLanguage);
         case 'web_search':
           return await this.execWebSearch(command);
         case 'youtube_search':
@@ -80,11 +80,11 @@ export class CommandExecutor {
         case 'store_memory':
           return await this.execStoreMemory(command);
         case 'dev_inspect':
-          return await this.execDevInspect(command);
+          return await this.execDevInspect(command, intentLanguage);
         case 'dev_test':
-          return await this.execDevTest(command);
+          return await this.execDevTest(command, intentLanguage);
         case 'dev_fix':
-          return await this.execDevFix(command);
+          return await this.execDevFix(command, intentLanguage);
         default:
           return { success: false, error_detail: this.error('unknown', true, this.fallbackError(intentLanguage), true) };
       }
@@ -114,10 +114,10 @@ export class CommandExecutor {
     }
   }
 
-  private async execOpenFile(command: ExecutionCommand): Promise<SkillResult> {
+  private async execOpenFile(command: ExecutionCommand, lang: 'ar' | 'tr' | 'en'): Promise<SkillResult> {
     const target = command.target || '';
     if (!target) {
-      return { success: false, error_detail: this.error('context', true, 'لم يتم تحديد الملف.', false) };
+      return { success: false, error_detail: this.error('context', true, this.msg(lang, 'file_not_specified'), false) };
     }
 
     const { content, error } = await this.fsSafety.readFile(target);
@@ -131,10 +131,10 @@ export class CommandExecutor {
     };
   }
 
-  private async execReadFile(command: ExecutionCommand): Promise<SkillResult> {
+  private async execReadFile(command: ExecutionCommand, lang: 'ar' | 'tr' | 'en'): Promise<SkillResult> {
     const target = command.target || '';
     if (!target) {
-      return { success: false, error_detail: this.error('context', true, 'لم يتم تحديد الملف.', false) };
+      return { success: false, error_detail: this.error('context', true, this.msg(lang, 'file_not_specified'), false) };
     }
 
     const { content, error } = await this.fsSafety.readFile(target);
@@ -148,7 +148,7 @@ export class CommandExecutor {
     };
   }
 
-  private async execSummarizeLogs(command: ExecutionCommand): Promise<SkillResult> {
+  private async execSummarizeLogs(command: ExecutionCommand, lang: 'ar' | 'tr' | 'en'): Promise<SkillResult> {
     const explicitPath = command.target || '';
     const candidates = explicitPath
       ? [explicitPath]
@@ -163,18 +163,18 @@ export class CommandExecutor {
       const errorCount = tail.filter(l => /error|failed|failure|exception|خطأ|فشل/i.test(l)).length;
       const warnCount = tail.filter(l => /warn|warning|تحذير/i.test(l)).length;
       const summary =
-        `الملف: ${target}\n` +
-        `آخر السطور المفحوصة: ${tail.length}\n` +
-        `أخطاء: ${errorCount}\n` +
-        `تحذيرات: ${warnCount}\n` +
-        `آخر أحداث:\n${tail.slice(-10).join('\n')}`;
+        `${this.msg(lang, 'log_file')}: ${target}\n` +
+        `${this.msg(lang, 'log_lines_scanned')}: ${tail.length}\n` +
+        `${this.msg(lang, 'log_errors')}: ${errorCount}\n` +
+        `${this.msg(lang, 'log_warnings')}: ${warnCount}\n` +
+        `${this.msg(lang, 'log_latest_events')}:\n${tail.slice(-10).join('\n')}`;
 
       return { success: true, data: { action: 'summarize_logs', target, result: summary } };
     }
 
     return {
       success: false,
-      error_detail: this.error('context', true, 'لا يوجد ملف سجل قابل للقراءة ضمن المسارات الآمنة.', false)
+      error_detail: this.error('context', true, this.msg(lang, 'no_safe_log_file'), false)
     };
   }
 
@@ -270,12 +270,12 @@ export class CommandExecutor {
     return { success: true, data: { action: 'memory_stored', content } };
   }
 
-  private async execDevInspect(command: ExecutionCommand): Promise<SkillResult> {
+  private async execDevInspect(command: ExecutionCommand, lang: 'ar' | 'tr' | 'en'): Promise<SkillResult> {
     const start = Date.now();
     const target = command.target || '';
     if (!target) {
       this.logDevAction('dev_inspect', target, 'failure', Date.now() - start, 'Missing target path');
-      return { success: false, error_detail: this.error('context', true, 'لم يتم تحديد مسار الملف.', false) };
+      return { success: false, error_detail: this.error('context', true, this.msg(lang, 'file_path_not_specified'), false) };
     }
 
     const { content, error } = await this.fsSafety.readFile(target);
@@ -286,9 +286,9 @@ export class CommandExecutor {
 
     try {
       const riskInfo = this.validator.analyzeRisk(target);
-      const riskPrefix = `**مستوى التأثير:** ${riskInfo.level === 'high' ? 'عالي 🔴' : riskInfo.level === 'medium' ? 'متوسط 🟡' : 'منخفض 🟢'}
-**التبعية النظامية:** هذا الملف يؤثر على ${riskInfo.impactedScopes.length} حزمة مترابطة.
-**السبب النطاقي:** ${riskInfo.reason}
+      const riskPrefix = `**${this.msg(lang, 'impact_level')}:** ${this.riskLevelText(riskInfo.level, lang)}
+**${this.msg(lang, 'system_dependency')}:** ${this.msg(lang, 'file_impacts_packages').replace('{count}', String(riskInfo.impactedScopes.length))}
+**${this.msg(lang, 'scope_reason')}:** ${riskInfo.reason}
 ---\n`;
 
       const summary = await this.patchGen.summarizeFile(content, target);
@@ -296,11 +296,11 @@ export class CommandExecutor {
       return { success: true, data: { action: 'dev_inspect', target, result: riskPrefix + summary } };
     } catch (err: any) {
       this.logDevAction('dev_inspect', target, 'failure', Date.now() - start, err.message);
-      return { success: false, error_detail: this.error('network', true, 'فشل تحليل الملف.', true) };
+      return { success: false, error_detail: this.error('network', true, this.msg(lang, 'file_analysis_failed'), true) };
     }
   }
 
-  private async execDevTest(command: ExecutionCommand): Promise<SkillResult> {
+  private async execDevTest(command: ExecutionCommand, lang: 'ar' | 'tr' | 'en'): Promise<SkillResult> {
     const start = Date.now();
     let target = command.target || '';
     
@@ -326,11 +326,14 @@ export class CommandExecutor {
     } catch (e: any) {
       const output = e.stderr || e.stdout || e.message || 'Unknown test error';
       this.logDevAction('dev_test', target || 'project', 'failure', Date.now() - start, output);
-      return { success: false, error_detail: this.error('unknown', true, `فشل الاختبارات في النطاق (${scopedCwd}).\n${output.substring(0, 1000)}`, true) };
+      return {
+        success: false,
+        error_detail: this.error('unknown', true, `${this.msg(lang, 'tests_failed_scope').replace('{scope}', scopedCwd)}\n${output.substring(0, 1000)}`, true)
+      };
     }
   }
 
-  private async execDevFix(command: ExecutionCommand): Promise<SkillResult> {
+  private async execDevFix(command: ExecutionCommand, lang: 'ar' | 'tr' | 'en'): Promise<SkillResult> {
     const ctx = this.context.getContext();
     const start = Date.now();
 
@@ -339,53 +342,56 @@ export class CommandExecutor {
       
       const lockAcquired = await ExecutionMutex.acquire(15000);
       if (!lockAcquired) {
-         return { success: false, error_detail: this.error('unknown', true, 'هناك عملية أخرى قيد التنفيذ (Race Condition). يرجى المحاولة لاحقاً.', false) };
+         return { success: false, error_detail: this.error('unknown', true, this.msg(lang, 'race_condition'), false) };
       }
 
-      // 1. Git Atomic Checkpoint
-      const gitCheckpoint = await this.gitSafety.createSafeCheckpoint();
+      try {
+        // 1. Git Atomic Checkpoint
+        const gitCheckpoint = await this.gitSafety.createSafeCheckpoint();
 
-      // 2. Apply via FileSystemSafety (handles backups natively)
-      const { success, backupPath } = await this.fsSafety.applyPatch(targetPath, ctx.dev_patch_content);
-      
-      this.context.updateContext({ dev_patch_content: undefined, dev_patch_target: undefined, awaiting_confirmation: false });
-      this.context.setLastAction(''); 
-      
-      if (success) {
-        // Validation Hook (Semantic)
-        const semanticCheck = await this.validator.validateProjectSemantic(targetPath);
-        
-        if (!semanticCheck.success) {
-           // Atomic Rollback on Semantic Failure
-           if (gitCheckpoint.success) await this.gitSafety.restoreCheckpoint(gitCheckpoint.hash!);
-           else if (backupPath) this.fsSafety.rollback(targetPath, backupPath);
+        // 2. Apply via FileSystemSafety (handles backups natively)
+        const { success, backupPath } = await this.fsSafety.applyPatch(targetPath, ctx.dev_patch_content);
 
-           this.logDevAction('dev_fix_apply', targetPath, 'rollback', Date.now() - start, semanticCheck.diff);
-           ExecutionMutex.release();
-           return { success: false, error_detail: this.error('unknown', true, `فشل التحقق الشامل بعد التطبيق أو تعارضت الاعتماديات بنطاق (${semanticCheck.scope}).\nتم التراجع كلياً للحفاظ على استقرارية المستودع.\n\nتفاصيل الخطأ:\n${semanticCheck.diff.substring(0, 300)}`, false) };
+        if (success) {
+          // Validation Hook (Semantic)
+          const semanticCheck = await this.validator.validateProjectSemantic(targetPath);
+
+          if (!semanticCheck.success) {
+             // Atomic Rollback on Semantic Failure
+             if (gitCheckpoint.success) await this.gitSafety.restoreCheckpoint(gitCheckpoint.hash!);
+             else if (backupPath) this.fsSafety.rollback(targetPath, backupPath);
+
+             this.logDevAction('dev_fix_apply', targetPath, 'rollback', Date.now() - start, semanticCheck.diff);
+             return {
+               success: false,
+               error_detail: this.error('unknown', true, this.msg(lang, 'semantic_validation_failed').replace('{scope}', semanticCheck.scope).replace('{diff}', semanticCheck.diff.substring(0, 300)), false)
+             };
+          }
+
+          this.context.updateContext({ dev_patch_content: undefined, dev_patch_target: undefined, awaiting_confirmation: false });
+          this.context.setLastAction('');
+
+          let resultMsg = this.msg(lang, 'patch_applied_success');
+          const runDiff = await this.gitSafety.getGitDiff(targetPath);
+          if (runDiff) resultMsg += `\n\n**Git Diff:**\n\`\`\`diff\n${runDiff.substring(0, 300)}...\n\`\`\``;
+
+          this.logDevAction('dev_fix_apply', targetPath, 'success', Date.now() - start, semanticCheck.diff);
+          return { success: true, data: { action: 'dev_fix', target: targetPath, result: resultMsg } };
         }
 
-        let resultMsg = 'تم التطبيق بنجاح ومصادقة الاعتماديات بأمان تام.';
-        const runDiff = await this.gitSafety.getGitDiff(targetPath);
-        if (runDiff) resultMsg += `\n\n**Git Diff:**\n\`\`\`diff\n${runDiff.substring(0, 300)}...\n\`\`\``;
-
-        // If everything perfectly passed, drop the backup stash explicitly (optional but clean)
-        this.logDevAction('dev_fix_apply', targetPath, 'success', Date.now() - start, semanticCheck.diff);
-        ExecutionMutex.release();
-        return { success: true, data: { action: 'dev_fix', target: targetPath, result: resultMsg } };
-      } else {
         // Rollback via Git or FS
         if (gitCheckpoint.success) await this.gitSafety.restoreCheckpoint(gitCheckpoint.hash!);
         else if (backupPath) this.fsSafety.rollback(targetPath, backupPath);
 
         this.logDevAction('dev_fix_apply', targetPath, 'failure', Date.now() - start, 'FileSystem write error');
+        return { success: false, error_detail: this.error('permission', true, this.msg(lang, 'save_failed_rolled_back'), false) };
+      } finally {
         ExecutionMutex.release();
-        return { success: false, error_detail: this.error('permission', true, 'فشل الحفظ بسبب الأمان. تم التراجع.', false) };
       }
     }
 
     const target = command.target || '';
-    if (!target) return { success: false, error_detail: this.error('context', true, 'لم يتم تحديد المسار.', false) };
+    if (!target) return { success: false, error_detail: this.error('context', true, this.msg(lang, 'path_not_specified'), false) };
 
     const { content, error } = await this.fsSafety.readFile(target);
     if (error) return { success: false, error_detail: this.error('permission', true, error, false) };
@@ -437,12 +443,12 @@ export class CommandExecutor {
 
     if (attempt >= maxAttempts || !newContent) {
       this.logDevAction('dev_fix_loop', target, 'failure', Date.now() - start, 'Max iterations reached');
-      return { success: false, error_detail: this.error('unknown', true, 'تحذير: لقد حاولت الأداة الإصلاح ولكن استمرت الأخطاء الهيكلية:\n' + fallbackSyntaxError, false) };
+      return { success: false, error_detail: this.error('unknown', true, `${this.msg(lang, 'fix_failed_structural')}\n${fallbackSyntaxError}`, false) };
     }
 
     if (riskAnalysis.level === 'high' && attempt > 0) {
        this.logDevAction('dev_fix_risk', target, 'failure', Date.now() - start, 'High risk loop aborted');
-       return { success: false, error_detail: this.error('permission', true, `تعديل عالي المخاطر (${riskAnalysis.reason}) استمر في الفشل. يرجى المراجعة يدوياً.`, false) };
+       return { success: false, error_detail: this.error('permission', true, this.msg(lang, 'high_risk_failed').replace('{reason}', riskAnalysis.reason), false) };
     }
 
     // Confidence Calculation
@@ -463,14 +469,13 @@ export class CommandExecutor {
 
     this.logDevAction('dev_fix_preview', target, 'success', Date.now() - start, `Risk: ${riskAnalysis.level}, Attempts: ${attempt+1}, Confidence: ${confidenceScore}, Impacted: ${riskAnalysis.impactedScopes.length}`);
     
-    // Arabic explanation dynamically mapping risk bounds & confidence
-    let messagePrefix = `\n**نسبة الموثوقية:** ${confidenceScore >= 0.7 ? 'عالية 🟢' : confidenceScore >= 0.4 ? 'متوسطة 🟡' : 'منخفضة 🔴'} (${confidenceScore * 100}%)\n`;
-    messagePrefix += `**نطاق التأثير:** ${riskAnalysis.impactedScopes.length} حزمة مترابطة.\n`;
+    let messagePrefix = `\n**${this.msg(lang, 'confidence_ratio')}:** ${this.confidenceLevelText(confidenceScore, lang)} (${confidenceScore * 100}%)\n`;
+    messagePrefix += `**${this.msg(lang, 'impact_scope')}:** ${this.msg(lang, 'linked_packages').replace('{count}', String(riskAnalysis.impactedScopes.length))}\n`;
     
     if (confidenceScore < 0.5) {
-       messagePrefix += `⚠️ **تحذير النظام:** الموثوقية منخفضة في هذا الحل المقترح. قد يؤدي لتكسير اجزاء أخرى. ينصح بالمراجعة اليدوية.\n`;
+       messagePrefix += `⚠️ **${this.msg(lang, 'system_warning')}:** ${this.msg(lang, 'low_confidence_warning')}\n`;
     } else if (riskAnalysis.level === 'high') {
-       messagePrefix += `⚠️ تنبيه: ${riskAnalysis.reason}\n`;
+       messagePrefix += `⚠️ ${this.msg(lang, 'alert')}: ${riskAnalysis.reason}\n`;
     }
 
     messagePrefix += `\n\`\`\`\n`;
@@ -479,7 +484,7 @@ export class CommandExecutor {
       success: true, 
       data: { action: 'dev_fix_preview', target, result: messagePrefix + newContent.substring(0, 500) + "\n...```" },
       requires_followup: true,
-      suggested_actions: ['نعم', 'إلغاء']
+      suggested_actions: [this.confirmKeyword(lang), this.msg(lang, 'cancel')]
     };
   }
 
@@ -497,6 +502,115 @@ export class CommandExecutor {
 
   private fallbackError(lang: 'ar' | 'tr' | 'en'): string {
     return lang === 'ar' ? 'حدث خطأ في التنفيذ.' : lang === 'tr' ? 'Yürütme sırasında hata oluştu.' : 'Execution error occurred.';
+  }
+
+  private riskLevelText(level: 'low' | 'medium' | 'high', lang: 'ar' | 'tr' | 'en'): string {
+    if (lang === 'ar') return level === 'high' ? 'عالي 🔴' : level === 'medium' ? 'متوسط 🟡' : 'منخفض 🟢';
+    if (lang === 'tr') return level === 'high' ? 'Yüksek 🔴' : level === 'medium' ? 'Orta 🟡' : 'Düşük 🟢';
+    return level === 'high' ? 'High 🔴' : level === 'medium' ? 'Medium 🟡' : 'Low 🟢';
+  }
+
+  private confidenceLevelText(score: number, lang: 'ar' | 'tr' | 'en'): string {
+    const level = score >= 0.7 ? 'high' : score >= 0.4 ? 'medium' : 'low';
+    if (lang === 'ar') return level === 'high' ? 'عالية 🟢' : level === 'medium' ? 'متوسطة 🟡' : 'منخفضة 🔴';
+    if (lang === 'tr') return level === 'high' ? 'Yüksek 🟢' : level === 'medium' ? 'Orta 🟡' : 'Düşük 🔴';
+    return level === 'high' ? 'High 🟢' : level === 'medium' ? 'Medium 🟡' : 'Low 🔴';
+  }
+
+  private msg(lang: 'ar' | 'tr' | 'en', key: string): string {
+    const messages: Record<string, Record<string, string>> = {
+      ar: {
+        file_not_specified: 'لم يتم تحديد الملف.',
+        log_file: 'الملف',
+        log_lines_scanned: 'آخر السطور المفحوصة',
+        log_errors: 'أخطاء',
+        log_warnings: 'تحذيرات',
+        log_latest_events: 'آخر أحداث',
+        no_safe_log_file: 'لا يوجد ملف سجل قابل للقراءة ضمن المسارات الآمنة.',
+        file_path_not_specified: 'لم يتم تحديد مسار الملف.',
+        impact_level: 'مستوى التأثير',
+        system_dependency: 'التبعية النظامية',
+        file_impacts_packages: 'هذا الملف يؤثر على {count} حزمة مترابطة.',
+        scope_reason: 'السبب النطاقي',
+        file_analysis_failed: 'فشل تحليل الملف.',
+        tests_failed_scope: 'فشل الاختبارات في النطاق ({scope}).',
+        race_condition: 'هناك عملية أخرى قيد التنفيذ (Race Condition). يرجى المحاولة لاحقاً.',
+        semantic_validation_failed: 'فشل التحقق الشامل بعد التطبيق أو تعارضت الاعتماديات بنطاق ({scope}).\nتم التراجع كلياً للحفاظ على استقرارية المستودع.\n\nتفاصيل الخطأ:\n{diff}',
+        patch_applied_success: 'تم التطبيق بنجاح ومصادقة الاعتماديات بأمان تام.',
+        save_failed_rolled_back: 'فشل الحفظ بسبب الأمان. تم التراجع.',
+        path_not_specified: 'لم يتم تحديد المسار.',
+        fix_failed_structural: 'تحذير: لقد حاولت الأداة الإصلاح ولكن استمرت الأخطاء الهيكلية:',
+        high_risk_failed: 'تعديل عالي المخاطر ({reason}) استمر في الفشل. يرجى المراجعة يدوياً.',
+        confidence_ratio: 'نسبة الموثوقية',
+        impact_scope: 'نطاق التأثير',
+        linked_packages: '{count} حزمة مترابطة.',
+        system_warning: 'تحذير النظام',
+        low_confidence_warning: 'الموثوقية منخفضة في هذا الحل المقترح. قد يؤدي لتكسير اجزاء أخرى. ينصح بالمراجعة اليدوية.',
+        alert: 'تنبيه',
+        cancel: 'إلغاء'
+      },
+      tr: {
+        file_not_specified: 'Dosya belirtilmedi.',
+        log_file: 'Dosya',
+        log_lines_scanned: 'İncelenen son satırlar',
+        log_errors: 'Hatalar',
+        log_warnings: 'Uyarılar',
+        log_latest_events: 'Son olaylar',
+        no_safe_log_file: 'Güvenli yollar içinde okunabilir bir log dosyası yok.',
+        file_path_not_specified: 'Dosya yolu belirtilmedi.',
+        impact_level: 'Etki seviyesi',
+        system_dependency: 'Sistem bağımlılığı',
+        file_impacts_packages: 'Bu dosya {count} bağlı paketi etkiliyor.',
+        scope_reason: 'Kapsam nedeni',
+        file_analysis_failed: 'Dosya analizi başarısız oldu.',
+        tests_failed_scope: 'Testler bu kapsamda başarısız oldu ({scope}).',
+        race_condition: 'Başka bir işlem çalışıyor (Race Condition). Lütfen daha sonra tekrar deneyin.',
+        semantic_validation_failed: 'Uygulama sonrası kapsamlı doğrulama başarısız oldu veya bağımlılıklar çakıştı ({scope}).\nDepo kararlılığını korumak için tamamen geri alındı.\n\nHata ayrıntıları:\n{diff}',
+        patch_applied_success: 'Yama başarıyla uygulandı ve bağımlılıklar güvenle doğrulandı.',
+        save_failed_rolled_back: 'Güvenlik nedeniyle kaydetme başarısız oldu. Geri alındı.',
+        path_not_specified: 'Yol belirtilmedi.',
+        fix_failed_structural: 'Uyarı: Araç düzeltmeyi denedi ancak yapısal hatalar devam etti:',
+        high_risk_failed: 'Yüksek riskli düzenleme ({reason}) başarısız olmaya devam etti. Lütfen manuel inceleyin.',
+        confidence_ratio: 'Güven oranı',
+        impact_scope: 'Etki kapsamı',
+        linked_packages: '{count} bağlı paket.',
+        system_warning: 'Sistem uyarısı',
+        low_confidence_warning: 'Bu çözüm önerisinde güven düşüktür. Diğer parçaları bozabilir. Manuel inceleme önerilir.',
+        alert: 'Uyarı',
+        cancel: 'İptal'
+      },
+      en: {
+        file_not_specified: 'File not specified.',
+        log_file: 'File',
+        log_lines_scanned: 'Recent lines scanned',
+        log_errors: 'Errors',
+        log_warnings: 'Warnings',
+        log_latest_events: 'Latest events',
+        no_safe_log_file: 'No readable log file found in safe paths.',
+        file_path_not_specified: 'File path not specified.',
+        impact_level: 'Impact level',
+        system_dependency: 'System dependency',
+        file_impacts_packages: 'This file affects {count} linked packages.',
+        scope_reason: 'Scope reason',
+        file_analysis_failed: 'File analysis failed.',
+        tests_failed_scope: 'Tests failed in scope ({scope}).',
+        race_condition: 'Another operation is in progress (race condition). Please try again later.',
+        semantic_validation_failed: 'Comprehensive validation failed after apply, or dependencies conflicted in scope ({scope}).\nRolled back fully to keep repository stability.\n\nError details:\n{diff}',
+        patch_applied_success: 'Patch applied successfully and dependencies validated safely.',
+        save_failed_rolled_back: 'Save failed due to safety checks. Rolled back.',
+        path_not_specified: 'Path not specified.',
+        fix_failed_structural: 'Warning: the tool tried to fix but structural errors persisted:',
+        high_risk_failed: 'High-risk edit ({reason}) kept failing. Please review manually.',
+        confidence_ratio: 'Confidence ratio',
+        impact_scope: 'Impact scope',
+        linked_packages: '{count} linked packages.',
+        system_warning: 'System warning',
+        low_confidence_warning: 'Confidence is low in this proposed solution. It may break other parts. Manual review is recommended.',
+        alert: 'Alert',
+        cancel: 'Cancel'
+      }
+    };
+    return messages[lang]?.[key] || messages.ar[key] || key;
   }
 
   private async searchMulti(query: string): Promise<Array<{ title: string; url: string; snippet: string; source: string }>> {
