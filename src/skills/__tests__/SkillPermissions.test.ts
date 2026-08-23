@@ -23,7 +23,6 @@ function systemIntent(confidence: number): Intent {
 
 describe('skill permission model', () => {
   it('treats confidence as routing information, not permission', async () => {
-    const router = new SkillRouter();
     const skill = new SystemSkill();
 
     expect(skill.validate(systemIntent(0.4), context)).toBe(true);
