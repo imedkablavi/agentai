@@ -1,134 +1,168 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
+import { AuditTrail } from '../security/AuditTrail';
+import { ensurePrivateDir, getAgentDataDir } from '../security/SecureStorage';
+
+export interface PatchReceipt {
+  success: boolean;
+  backupPath?: string;
+  createdNewFile?: boolean;
+}
 
 export class FileSystemSafety {
-  private workspaceRoot: string;
+  private readonly workspaceRoot: string;
+  private readonly rollbackDir: string;
+  private readonly audit: AuditTrail;
 
-  constructor(workspaceRoot: string = process.cwd()) {
+  constructor(workspaceRoot: string = process.cwd(), dataDir: string = getAgentDataDir(), audit?: AuditTrail) {
     this.workspaceRoot = path.resolve(workspaceRoot);
+    this.rollbackDir = path.join(dataDir, 'rollback');
+    this.audit = audit || new AuditTrail(dataDir);
   }
 
   isSafePath(targetPath: string): boolean {
-    if (!targetPath) return false;
-    try {
-      // Normalize to prevent traversal
-      const normalizedPath = path.normalize(targetPath);
-      const resolved = path.resolve(this.workspaceRoot, normalizedPath);
-      
-      // Strict prefix check and realpath symlink resolution
-      let actualResolved = resolved;
-      if (fs.existsSync(resolved)) {
-        actualResolved = fs.realpathSync(resolved);
-      }
-      if (!actualResolved.startsWith(this.workspaceRoot)) return false;
-      
-      // Protected directories/files rejection
-      const blockedPatterns = [
-        /(^|[\\/])node_modules([\\/]|$)/,
-        /(^|[\\/])vendor([\\/]|$)/,
-        /(^|[\\/])\.git([\\/]|$)/,
-        /(^|[\\/])dist([\\/]|$)/,
-        /(^|[\\/])build([\\/]|$)/,
-        /(^|[\\/])\.env/,
-        /\.exe$/, /\.dll$/, /\.so$/, /\.dylib$/
-      ];
-      if (blockedPatterns.some(p => p.test(actualResolved))) return false;
-      
-      return true;
-    } catch {
-      return false;
-    }
+    return this.resolveSafePath(targetPath) !== null;
   }
 
   async readFile(targetPath: string): Promise<{ content: string; error?: string }> {
-    if (!this.isSafePath(targetPath)) {
-      return { content: '', error: 'Path rejected due to safety boundaries' };
-    }
-    const resolved = path.resolve(this.workspaceRoot, targetPath);
-    if (!fs.existsSync(resolved)) {
-      return { content: '', error: 'File unreadable or does not exist' };
-    }
+    const resolved = this.resolveSafePath(targetPath);
+    if (!resolved) return { content: '', error: 'Path rejected due to workspace safety boundaries' };
+    if (!fs.existsSync(resolved)) return { content: '', error: 'File unreadable or does not exist' };
 
-    const stat = fs.statSync(resolved);
-    if (stat.size > 500000) { // arbitrary 500KB limit
-      return { content: '', error: 'File too large (> 500KB)' };
-    }
+    try {
+      const stat = fs.statSync(resolved);
+      if (!stat.isFile()) return { content: '', error: 'Target is not a regular file' };
+      if (stat.size > 500_000) return { content: '', error: 'File too large (> 500KB)' };
 
-    // Binary check heuristic
-    const buffer = Buffer.alloc(1024);
-    const fd = fs.openSync(resolved, 'r');
-    const bytesRead = fs.readSync(fd, buffer, 0, 1024, 0);
-    fs.closeSync(fd);
-    
-    let isBinary = false;
-    for (let i = 0; i < bytesRead; i++) {
-        if (buffer[i] === 0) { isBinary = true; break; }
-    }
-    if (isBinary) {
-        return { content: '', error: 'Cannot read binary file contents expected text' };
-    }
-
-    const content = fs.readFileSync(resolved, 'utf8');
-    return { content };
-  }
-
-  async applyPatch(targetPath: string, newContent: string): Promise<{ success: boolean; backupPath?: string }> {
-    if (!this.isSafePath(targetPath)) return { success: false };
-    if (!newContent || !newContent.trim()) return { success: false };
-    const resolved = path.resolve(this.workspaceRoot, targetPath);
-    
-    let backupPath: string | undefined;
-    
-    // Backup first
-    if (fs.existsSync(resolved)) {
-      backupPath = `${resolved}.backup-${Date.now()}`;
+      const fd = fs.openSync(resolved, 'r');
       try {
-        fs.copyFileSync(resolved, backupPath);
-      } catch {
-        return { success: false }; // Fail if we cannot backup
-      }
-    }
-    
-    try {
-      fs.writeFileSync(resolved, newContent, 'utf8');
-      
-      // Basic integrity check (did it actually write, is it not empty when shouldn't be)
-      if (newContent.trim().length > 0) {
-        const stats = fs.statSync(resolved);
-        if (stats.size === 0) throw new Error('File written but is empty');
+        const buffer = Buffer.alloc(Math.min(1024, Math.max(1, stat.size)));
+        const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, 0);
+        for (let i = 0; i < bytesRead; i += 1) {
+          if (buffer[i] === 0) return { content: '', error: 'Binary files are not readable through the text interface' };
+        }
+      } finally {
+        fs.closeSync(fd);
       }
 
-      this.logAction('applyPatch', targetPath, 'success');
-      return { success: true, backupPath };
-    } catch (err: any) {
-      if (backupPath) this.rollback(targetPath, backupPath);
-      this.logAction('applyPatch', targetPath, `failure: ${err.message}`);
-      return { success: false };
+      return { content: fs.readFileSync(resolved, 'utf8') };
+    } catch {
+      return { content: '', error: 'File could not be read safely' };
     }
   }
 
-  rollback(targetPath: string, backupPath: string): boolean {
+  async applyPatch(targetPath: string, newContent: string): Promise<PatchReceipt> {
+    const resolved = this.resolveSafePath(targetPath);
+    if (!resolved || !newContent || !newContent.trim()) return { success: false };
+    if (Buffer.byteLength(newContent, 'utf8') > 2_000_000) return { success: false };
+
+    const parent = path.dirname(resolved);
+    if (!fs.existsSync(parent) || !fs.statSync(parent).isDirectory()) return { success: false };
+
+    const existedBefore = fs.existsSync(resolved);
+    let backupPath: string | undefined;
+    let tempPath: string | undefined;
+
     try {
-      const resolved = path.resolve(this.workspaceRoot, targetPath);
-      if (fs.existsSync(backupPath)) {
+      if (existedBefore) {
+        ensurePrivateDir(this.rollbackDir);
+        backupPath = path.join(this.rollbackDir, `${randomUUID()}.bak`);
+        fs.copyFileSync(resolved, backupPath);
+        try { fs.chmodSync(backupPath, 0o600); } catch {}
+      }
+
+      tempPath = path.join(parent, `.${path.basename(resolved)}.${process.pid}.${randomUUID()}.tmp`);
+      const existingMode = existedBefore ? fs.statSync(resolved).mode : 0o600;
+      fs.writeFileSync(tempPath, newContent, { encoding: 'utf8', mode: existingMode });
+      if (fs.statSync(tempPath).size === 0) throw new Error('Atomic patch staging produced an empty file');
+      fs.renameSync(tempPath, resolved);
+      tempPath = undefined;
+
+      this.audit.record({ action: 'file_patch', outcome: 'success', target: this.relativeTarget(resolved), mode: 'internal' });
+      return { success: true, backupPath, createdNewFile: !existedBefore };
+    } catch {
+      if (tempPath && fs.existsSync(tempPath)) {
+        try { fs.unlinkSync(tempPath); } catch {}
+      }
+      if (backupPath) this.rollback(targetPath, backupPath);
+      else if (!existedBefore && fs.existsSync(resolved)) {
+        try { fs.unlinkSync(resolved); } catch {}
+      }
+      this.audit.record({ action: 'file_patch', outcome: 'failure', target: targetPath, mode: 'internal' });
+      return { success: false, backupPath, createdNewFile: !existedBefore };
+    }
+  }
+
+  rollback(targetPath: string, backupPath?: string, createdNewFile = false): boolean {
+    const resolved = this.resolveSafePath(targetPath);
+    if (!resolved) return false;
+
+    try {
+      if (backupPath && this.isPrivateRollbackPath(backupPath) && fs.existsSync(backupPath)) {
         fs.copyFileSync(backupPath, resolved);
-        this.logAction('rollback', targetPath, 'success');
+        this.discardBackup(backupPath);
+        this.audit.record({ action: 'file_patch', outcome: 'rollback', target: this.relativeTarget(resolved), mode: 'internal' });
+        return true;
+      }
+      if (createdNewFile && fs.existsSync(resolved)) {
+        fs.unlinkSync(resolved);
+        this.audit.record({ action: 'file_patch', outcome: 'rollback', target: this.relativeTarget(resolved), mode: 'internal' });
         return true;
       }
       return false;
     } catch {
-      this.logAction('rollback', targetPath, 'failure');
+      this.audit.record({ action: 'file_patch', outcome: 'failure', target: targetPath, detail: 'rollback_failed', mode: 'internal' });
       return false;
     }
   }
 
-  private logAction(action: string, target: string, result: string) {
+  discardBackup(backupPath?: string): void {
+    if (!backupPath || !this.isPrivateRollbackPath(backupPath)) return;
     try {
-      const logLine = `[${new Date().toISOString()}] ACTION: ${action} | TARGET: ${target} | RESULT: ${result}\n`;
-      const logFile = path.join(this.workspaceRoot, '.agent_action.log');
-      fs.appendFileSync(logFile, logLine, 'utf8');
+      if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
     } catch {
-      // Silent fail for logging to avoid blocking execution
+      // Cleanup failure is recorded by the caller when material to the transaction.
     }
+  }
+
+  private resolveSafePath(targetPath: string): string | null {
+    if (!targetPath || targetPath.length > 1000 || /[\u0000\r\n]/.test(targetPath)) return null;
+
+    try {
+      const resolved = path.resolve(this.workspaceRoot, targetPath);
+      if (!this.isInside(this.workspaceRoot, resolved)) return null;
+
+      const relative = path.relative(this.workspaceRoot, resolved);
+      const blocked = /(^|[\\/])(?:node_modules|vendor|\.git|dist|build)(?:[\\/]|$)|(^|[\\/])\.env(?:\.|$)|\.(?:exe|dll|so|dylib|pem|p12|pfx|key)$/i;
+      if (blocked.test(relative)) return null;
+
+      if (fs.existsSync(resolved)) {
+        const real = fs.realpathSync(resolved);
+        if (!this.isInside(this.workspaceRoot, real)) return null;
+      } else {
+        const parent = path.dirname(resolved);
+        if (!fs.existsSync(parent)) return null;
+        const realParent = fs.realpathSync(parent);
+        if (!this.isInside(this.workspaceRoot, realParent)) return null;
+      }
+
+      return resolved;
+    } catch {
+      return null;
+    }
+  }
+
+  private isInside(root: string, candidate: string): boolean {
+    const relative = path.relative(root, candidate);
+    return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+  }
+
+  private isPrivateRollbackPath(candidate: string): boolean {
+    return this.isInside(path.resolve(this.rollbackDir), path.resolve(candidate));
+  }
+
+  private relativeTarget(resolved: string): string {
+    return path.relative(this.workspaceRoot, resolved) || '.';
   }
 }
