@@ -1,8 +1,8 @@
-import { 
-  SkillRouter as ISkillRouter, 
-  Skill, 
-  Intent, 
-  ConversationContext 
+import {
+  SkillRouter as ISkillRouter,
+  Skill,
+  Intent,
+  ConversationContext,
 } from '../types';
 import { ApplicationSkill } from './ApplicationSkill';
 import { WebSearchSkill } from './WebSearchSkill';
@@ -15,59 +15,62 @@ import { PersonalAssistantSkill } from './PersonalAssistantSkill';
 
 export class SkillRouter implements ISkillRouter {
   private skills: Skill[] = [];
-  private safetyThreshold = 0.85;
-  private permissionRequiredIntents = [
-    'system_command', 'shutdown', 'restart', 'format', 'delete'
-  ];
+  private routingConfidenceFloor = 0.3;
 
   constructor() {
     this.initializeSkills();
   }
 
   route(intent: Intent, context: ConversationContext): Skill | null {
-    // Check confidence threshold
-    if (intent.confidence < 0.3) {
-      return null;
-    }
+    // Confidence is only a semantic-routing signal. It never authorizes execution.
+    if (intent.confidence < this.routingConfidenceFloor) return null;
+    if (intent.confidence < 0.6 && this.isAmbiguousIntent(intent)) return null;
 
-    // Check safety requirements
-    if (!this.validateSafety(intent)) {
-      return null;
-    }
-
-    // Find matching skill
     for (const skill of this.skills) {
-      if (skill.supported_intents.includes(intent.name)) {
-        if (skill.validate(intent, context)) {
-          return skill;
-        }
+      if (skill.supported_intents.includes(intent.name) && skill.validate(intent, context)) {
+        return skill;
       }
     }
 
-    // Try fallback skills for unknown intents
-    if (intent.name === 'unknown') {
-      return this.getFallbackSkill(intent, context);
+    // Unknown natural-language queries may fall back to web search only when they
+    // are not imperative/ambiguous. The execution policy still evaluates output.
+    if (intent.name === 'unknown' && this.isSafeSearchFallback(intent)) {
+      const webSearchSkill = this.skills.find(skill => skill.name === 'WebSearchSkill');
+      if (webSearchSkill) {
+        intent.name = 'search_web';
+        intent.entities.query = intent.raw_text;
+        return webSearchSkill;
+      }
     }
 
     return null;
   }
 
   validatePermissions(skill: Skill, intent: Intent): boolean {
-    // Check if intent requires elevated permissions
-    if (this.permissionRequiredIntents.some(permIntent => intent.name.includes(permIntent))) {
-      return intent.confidence >= this.safetyThreshold;
-    }
-
-    // Check for destructive commands
-    if (this.isDestructiveIntent(intent)) {
-      return intent.confidence >= this.safetyThreshold;
-    }
-
-    return true;
+    // Compatibility API: verifies only that the skill is registered and claims the
+    // intent. Authorization belongs exclusively to ExecutionPolicy.
+    return this.skills.includes(skill) && skill.supported_intents.includes(intent.name);
   }
 
   getAvailableSkills(): Skill[] {
-    return this.skills;
+    return [...this.skills];
+  }
+
+  addSkill(skill: Skill): void {
+    this.skills.push(skill);
+  }
+
+  removeSkill(skillName: string): void {
+    this.skills = this.skills.filter(skill => skill.name !== skillName);
+  }
+
+  updateRoutingConfidenceThreshold(threshold: number): void {
+    this.routingConfidenceFloor = Math.max(0.1, Math.min(0.8, threshold));
+  }
+
+  /** @deprecated This changes routing confidence only; it never grants permission. */
+  updateSafetyThreshold(threshold: number): void {
+    this.updateRoutingConfidenceThreshold(threshold);
   }
 
   private initializeSkills(): void {
@@ -79,77 +82,34 @@ export class SkillRouter implements ISkillRouter {
       new SelectionSkill(),
       new MemorySkill(),
       new PersonalAssistantSkill(),
-      new DeveloperSkill()
+      new DeveloperSkill(),
     ];
-  }
-
-  private validateSafety(intent: Intent): boolean {
-    // High confidence required for system commands
-    if (intent.name.includes('system_command')) {
-      return intent.confidence >= 0.9;
-    }
-
-    // Check for ambiguous commands
-    if (intent.confidence < 0.6 && this.isAmbiguousIntent(intent)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  private getFallbackSkill(intent: Intent, context: ConversationContext): Skill | null {
-    // Try to infer skill from context
-    if (context.active_skill) {
-      const activeSkill = this.skills.find(s => s.name === context.active_skill);
-      if (activeSkill && activeSkill.validate(intent, context)) {
-        return activeSkill;
-      }
-    }
-
-    // Try web search for unknown queries
-    if (intent.raw_text.length > 3) {
-      const webSearchSkill = this.skills.find(s => s.name === 'WebSearchSkill');
-      if (webSearchSkill) {
-        intent.name = 'search_web';
-        intent.entities.query = intent.raw_text;
-        return webSearchSkill;
-      }
-    }
-
-    return null;
-  }
-
-  private isDestructiveIntent(intent: Intent): boolean {
-    const destructivePatterns = [
-      /delete/i, /remove/i, /format/i, /erase/i, /destroy/i,
-      /احذف/i, /امسح/i, /افرغ/i, /نسف/i,
-      /sil/i, /temizle/i, /yok et/i
-    ];
-
-    return destructivePatterns.some(pattern => pattern.test(intent.raw_text));
   }
 
   private isAmbiguousIntent(intent: Intent): boolean {
-    const ambiguousPatterns = [
-      /this/i, /that/i, /it/i, /them/i,
-      /هذا/i, /ذلك/i, /هذه/i, /ذلكم/i,
-      /bu/i, /şu/i, /o/i
-    ];
+    const raw = intent.raw_text.trim().toLocaleLowerCase();
+    if (!raw) return true;
 
-    return ambiguousPatterns.some(pattern => pattern.test(intent.raw_text)) &&
-           !intent.entities.query &&
-           !intent.entities.application;
+    const pronounOnlyOrReference = /^(?:this|that|it|them|do it|execute it|هذا|هذه|ذلك|نفذها|نفذه|اعملها|bu|şu|o|bunu yap)$/i;
+    if (pronounOnlyOrReference.test(raw)) return true;
+
+    const refersWithoutTarget = /\b(?:this|that|it|them)\b/i.test(raw)
+      || /(?:هذا|هذه|ذلك|هذي)/i.test(raw)
+      || /\b(?:bu|şu|onu|bunu)\b/i.test(raw);
+
+    const hasTarget = Boolean(
+      intent.entities.query
+      || intent.entities.application
+      || intent.entities.file_path
+      || intent.entities.url
+      || intent.entities.index,
+    );
+    return refersWithoutTarget && !hasTarget;
   }
 
-  addSkill(skill: Skill): void {
-    this.skills.push(skill);
-  }
-
-  removeSkill(skillName: string): void {
-    this.skills = this.skills.filter(s => s.name !== skillName);
-  }
-
-  updateSafetyThreshold(threshold: number): void {
-    this.safetyThreshold = Math.max(0.5, Math.min(1.0, threshold));
+  private isSafeSearchFallback(intent: Intent): boolean {
+    if (this.isAmbiguousIntent(intent) || intent.raw_text.length < 4) return false;
+    const imperative = /^(?:open|close|run|execute|delete|remove|shutdown|restart|format|افتح|اغلق|أغلق|نفذ|احذف|امسح|اطفئ|أطفئ|aç|kapat|çalıştır|sil|yeniden)/i;
+    return !imperative.test(intent.raw_text.trim());
   }
 }
