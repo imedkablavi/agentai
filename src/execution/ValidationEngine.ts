@@ -1,47 +1,52 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
+import { redactedError, redactString } from '../security/Redaction';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export class ValidationEngine {
-  private workspaceRoot: string;
+  private readonly workspaceRoot: string;
   private packageCache: { dir: string; name: string; deps: string[] }[] | null = null;
 
   constructor(workspaceRoot: string = process.cwd()) {
     this.workspaceRoot = path.resolve(workspaceRoot);
   }
 
-  // Helper to discover all packages up to depth 3
   public getWorkspacePackages(): { dir: string; name: string; deps: string[] }[] {
     if (this.packageCache) return this.packageCache;
-    
+
     const results: { dir: string; name: string; deps: string[] }[] = [];
-    const scan = (dir: string, depth: number) => {
-      if (depth > 3) return;
-      if (dir.includes('node_modules') || dir.includes('.git')) return;
+    const scan = (dir: string, depth: number): void => {
+      if (depth > 3 || !this.isInsideWorkspace(dir)) return;
+      if (/(^|[\\/])(?:node_modules|\.git|dist|build)([\\/]|$)/.test(dir)) return;
 
       try {
         const items = fs.readdirSync(dir, { withFileTypes: true });
         for (const item of items) {
+          if (item.isSymbolicLink()) continue;
           if (item.isDirectory()) {
             scan(path.join(dir, item.name), depth + 1);
           } else if (item.name === 'package.json') {
-             try {
-               const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
-               if (pkg.name) {
-                 const allDeps = [
-                   ...Object.keys(pkg.dependencies || {}),
-                   ...Object.keys(pkg.peerDependencies || {}),
-                   ...Object.keys(pkg.devDependencies || {})
-                 ];
-                 results.push({ dir, name: pkg.name, deps: allDeps });
-               }
-             } catch {}
+            try {
+              const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+              if (pkg.name) {
+                const deps = [
+                  ...Object.keys(pkg.dependencies || {}),
+                  ...Object.keys(pkg.peerDependencies || {}),
+                  ...Object.keys(pkg.devDependencies || {}),
+                ];
+                results.push({ dir, name: pkg.name, deps });
+              }
+            } catch {
+              // Ignore malformed package metadata during discovery.
+            }
           }
         }
-      } catch {}
+      } catch {
+        // Unreadable directories are excluded from validation scope.
+      }
     };
 
     scan(this.workspaceRoot, 0);
@@ -50,36 +55,31 @@ export class ValidationEngine {
   }
 
   public getImpactedScopes(filePath: string): string[] {
-    const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.resolve(this.workspaceRoot, filePath);
-    const { root, pkg } = this.getNearestPackageInfo(absoluteFilePath);
+    const absolute = this.safeAbsolutePath(filePath);
+    if (!absolute) return [this.workspaceRoot];
+    const { root, pkg } = this.getNearestPackageInfo(absolute);
     if (!pkg?.name) return [root];
 
-    const currentName = pkg.name;
-    const allPkgs = this.getWorkspacePackages();
-    const impacted = new Set<string>();
-    impacted.add(root);
-
-    // Find any package that depends on currentName
-    for (const p of allPkgs) {
-      if (p.dir !== root && p.deps.includes(currentName)) {
-        impacted.add(p.dir);
-      }
+    const impacted = new Set<string>([root]);
+    for (const candidate of this.getWorkspacePackages()) {
+      if (candidate.dir !== root && candidate.deps.includes(pkg.name)) impacted.add(candidate.dir);
     }
-
     return Array.from(impacted);
   }
 
   public getNearestPackageInfo(filePath: string): { root: string; pkg: any; isWorkspaceRoot: boolean } {
-    const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.resolve(this.workspaceRoot, filePath);
-    let currentDir = path.dirname(absoluteFilePath);
-    
-    while (currentDir.startsWith(this.workspaceRoot)) {
+    const absolute = this.safeAbsolutePath(filePath) || this.workspaceRoot;
+    let currentDir = fs.existsSync(absolute) && fs.statSync(absolute).isDirectory() ? absolute : path.dirname(absolute);
+
+    while (this.isInsideWorkspace(currentDir)) {
       const pkgPath = path.join(currentDir, 'package.json');
       if (fs.existsSync(pkgPath)) {
         try {
           const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
           return { root: currentDir, pkg, isWorkspaceRoot: currentDir === this.workspaceRoot };
-        } catch {}
+        } catch {
+          // Continue walking to a parent package boundary.
+        }
       }
       if (currentDir === this.workspaceRoot) break;
       const parentDir = path.dirname(currentDir);
@@ -91,74 +91,63 @@ export class ValidationEngine {
   }
 
   public analyzeRisk(filePath: string): { level: 'low' | 'medium' | 'high'; reason: string; impactedScopes: string[] } {
-    const { root, isWorkspaceRoot, pkg } = this.getNearestPackageInfo(filePath);
-    const normalized = filePath.replace(/\\/g, '/');
     const impactedScopes = this.getImpactedScopes(filePath);
-    
-    const isShared = impactedScopes.length > 1;
-    const dependentsCount = impactedScopes.length - 1;
-    
-    if (normalized.match(/(package\.json|tsconfig\.json|vite\.config|\.env|webpack)/)) {
-      return { level: 'high', reason: 'تعديل على إعدادات جذرية تؤثر على بيئة العمل.', impactedScopes };
-    }
-    
-    // Explicit entrypoint modification logic
-    // Treat only explicit entrypoints (index/main) as high risk; app.* stays medium to reduce false positives.
-    if (normalized.match(/(index|main)\.(ts|js|tsx|jsx)$/)) {
-      return { level: 'high', reason: 'تعديل على نقطة دخول هيكلية قد يكسر بناء التطبيق.', impactedScopes };
-    }
+    const normalized = filePath.replace(/\\/g, '/');
 
-    if (isShared) {
-      return { level: 'high', reason: `تعديل في وحدة مشتركة تؤثر على ${dependentsCount} حزم أخرى تعتمد عليها.`, impactedScopes };
+    if (/(^|\/)(package\.json|tsconfig\.json|vite\.config|webpack\.config|\.env)/i.test(normalized)) {
+      return { level: 'high', reason: 'Root/build configuration can affect the whole execution environment.', impactedScopes };
     }
-
-    if (normalized.match(/\.(test|spec)\.(ts|js|jsx|tsx)$/)) {
-      return { level: 'low', reason: 'تعديل على ملف اختبار معزول.', impactedScopes };
+    if (/(^|\/)(index|main)\.(ts|js|tsx|jsx)$/i.test(normalized)) {
+      return { level: 'high', reason: 'Entrypoint changes can affect application startup.', impactedScopes };
     }
-
-    return { level: 'medium', reason: 'نطاق التأثير محلي داخل الحزمة.', impactedScopes };
+    if (impactedScopes.length > 1) {
+      return { level: 'high', reason: `Shared package affects ${impactedScopes.length - 1} dependent scope(s).`, impactedScopes };
+    }
+    if (/\.(test|spec)\.(ts|js|jsx|tsx)$/i.test(normalized)) {
+      return { level: 'low', reason: 'Change is scoped to a test file.', impactedScopes };
+    }
+    return { level: 'medium', reason: 'Change is local to one package but still modifies executable source.', impactedScopes };
   }
 
   async validateFile(filePath: string): Promise<{ success: boolean; stderr: string; stdout: string; confidence: 'high' | 'partial' }> {
-    const ext = path.extname(filePath).toLowerCase();
-    
-    // Check if JSON
+    const absolute = this.safeAbsolutePath(filePath);
+    if (!absolute) return { success: false, stderr: 'Path is outside workspace scope', stdout: '', confidence: 'high' };
+    const ext = path.extname(absolute).toLowerCase();
+
     if (ext === '.json') {
       try {
-        const content = fs.readFileSync(filePath, 'utf8');
-        JSON.parse(content);
+        JSON.parse(fs.readFileSync(absolute, 'utf8'));
         return { success: true, stderr: '', stdout: 'JSON is valid', confidence: 'high' };
-      } catch (e: any) {
-        return { success: false, stderr: e.message, stdout: '', confidence: 'high' };
+      } catch (error) {
+        return { success: false, stderr: redactedError(error), stdout: '', confidence: 'high' };
       }
     }
 
-    const { root: scopingRoot, pkg } = this.getNearestPackageInfo(filePath);
-    
-    if (ext === '.ts' || ext === '.tsx') {
-      try {
+    const { root: scopedRoot, pkg } = this.getNearestPackageInfo(absolute);
+    try {
+      if (ext === '.ts' || ext === '.tsx') {
         if (pkg.scripts?.typecheck) {
-           await execAsync('npm run typecheck', { timeout: 15000, cwd: scopingRoot });
+          await this.run(this.npmExecutable(), ['run', 'typecheck'], scopedRoot, 20_000);
         } else {
-           await execAsync(`npx tsc --noEmit --isolatedModules "${filePath}"`, { timeout: 15000, cwd: scopingRoot });
+          await this.run(this.npxExecutable(), ['tsc', '--noEmit', '--isolatedModules', absolute], scopedRoot, 20_000);
         }
-        return { success: true, stderr: '', stdout: 'Syntax OK', confidence: 'high' };
-      } catch (e: any) {
-        return { success: false, stderr: e.stderr || e.message, stdout: e.stdout || '', confidence: 'high' };
+        return { success: true, stderr: '', stdout: 'TypeScript validation passed', confidence: 'high' };
       }
+
+      if (ext === '.js' || ext === '.jsx') {
+        await this.run(process.execPath, ['--check', absolute], scopedRoot, 10_000);
+        return { success: true, stderr: '', stdout: 'JavaScript syntax passed', confidence: 'high' };
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        stderr: redactString(String(error?.stderr || error?.message || 'Validation failed'), 3000),
+        stdout: redactString(String(error?.stdout || ''), 3000),
+        confidence: 'high',
+      };
     }
 
-    if (ext === '.js' || ext === '.jsx') {
-      try {
-        await execAsync(`node --check "${filePath}"`, { timeout: 10000, cwd: scopingRoot });
-        return { success: true, stderr: '', stdout: 'Syntax OK', confidence: 'high' };
-      } catch (e: any) {
-        return { success: false, stderr: e.stderr || e.message, stdout: e.stdout || '', confidence: 'high' };
-      }
-    }
-
-    // Default for other files
-    return { success: true, stderr: '', stdout: 'No static validator found, assuming valid.', confidence: 'partial' };
+    return { success: true, stderr: '', stdout: 'No static validator is configured for this file type.', confidence: 'partial' };
   }
 
   async validateProjectSemantic(affectedFile: string): Promise<{ success: boolean; diff: string; scope: string }> {
@@ -168,26 +157,59 @@ export class ValidationEngine {
     let runCount = 0;
 
     for (const scopeRoot of impactedScopes) {
+      if (!this.isInsideWorkspace(scopeRoot)) {
+        allPassed = false;
+        combinedOutput += '[scope]: rejected outside workspace boundary.\n';
+        continue;
+      }
+
       const pkgPath = path.join(scopeRoot, 'package.json');
-      if (fs.existsSync(pkgPath)) {
+      if (!fs.existsSync(pkgPath)) continue;
+
+      try {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-        if (pkg.scripts?.test) {
-          try {
-            await execAsync(`npm run test`, { timeout: 30000, cwd: scopeRoot });
-            combinedOutput += `[${pkg.name || scopeRoot}]: Tests passed.\n`;
-            runCount++;
-          } catch (e: any) {
-            allPassed = false;
-            combinedOutput += `[${pkg.name || scopeRoot}]: Tests failed - ${e.stderr || e.message}\n`;
-          }
-        }
+        if (!pkg.scripts?.test) continue;
+        runCount += 1;
+        await this.run(this.npmExecutable(), ['run', 'test'], scopeRoot, 30_000);
+        combinedOutput += `[${pkg.name || path.basename(scopeRoot)}]: tests passed.\n`;
+      } catch (error: any) {
+        allPassed = false;
+        combinedOutput += `[${path.basename(scopeRoot)}]: tests failed - ${redactString(String(error?.stderr || error?.message || 'unknown error'), 1000)}\n`;
       }
     }
-    
+
     if (runCount === 0) {
-      return { success: true, diff: 'No test suites found across impacted scopes. Confidence partial.', scope: impactedScopes.join(', ') };
+      return {
+        success: true,
+        diff: 'No test suite was found in impacted scopes; validation confidence is partial.',
+        scope: impactedScopes.join(', '),
+      };
     }
-    
+
     return { success: allPassed, diff: combinedOutput, scope: impactedScopes.join(', ') };
   }
+
+  private async run(executable: string, args: string[], cwd: string, timeout: number): Promise<void> {
+    await execFileAsync(executable, args, {
+      cwd,
+      timeout,
+      maxBuffer: 1024 * 1024,
+      windowsHide: true,
+      env: { ...process.env, npm_config_yes: 'false' },
+    });
+  }
+
+  private safeAbsolutePath(filePath: string): string | null {
+    if (!filePath || /[\u0000\r\n]/.test(filePath)) return null;
+    const absolute = path.resolve(this.workspaceRoot, filePath);
+    return this.isInsideWorkspace(absolute) ? absolute : null;
+  }
+
+  private isInsideWorkspace(candidate: string): boolean {
+    const relative = path.relative(this.workspaceRoot, path.resolve(candidate));
+    return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+  }
+
+  private npmExecutable(): string { return process.platform === 'win32' ? 'npm.cmd' : 'npm'; }
+  private npxExecutable(): string { return process.platform === 'win32' ? 'npx.cmd' : 'npx'; }
 }
