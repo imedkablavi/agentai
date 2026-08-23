@@ -51,8 +51,6 @@ export interface PreferenceMemory {
   browser: string;
   voice_mode: boolean;
   voice_response_mode?: 'short' | 'long';
-  auto_execute_threshold: number;
-  confirmation_required: boolean;
 }
 
 export interface MemoryPrivacyConfig {
@@ -107,7 +105,6 @@ export interface ContextManager {
   getMissingContext(intent: Intent): string[];
   setState(state: ConversationState): void;
   setSelectionContext(context: SelectionContext | null): void;
-  confirmPending(): void;
 }
 
 export interface IntentEngine {
@@ -128,14 +125,6 @@ export interface ResponseGenerator {
   formatForVoice(text: string): string;
   formatForText(text: string): string;
   generateErrorResponse(error: ErrorResponse, language: 'ar' | 'tr' | 'en'): string;
-}
-
-/** @deprecated Confidence is a routing signal, not an authorization grant. */
-export interface SafetyConfig {
-  min_confidence_threshold: number;
-  destructive_commands: string[];
-  confirmation_required_patterns: string[];
-  max_retry_attempts: number;
 }
 
 export type ConversationState = 'IDLE' | 'AWAITING_SELECTION' | 'AWAITING_CONFIRMATION' | 'EXECUTING' | 'ERROR';
