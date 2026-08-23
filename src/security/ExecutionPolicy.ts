@@ -168,10 +168,11 @@ export class ExecutionPolicy {
   private finish(
     command: ExecutionCommand,
     mode: ExecutionMode,
-    requiresApproval: boolean,
+    policyRequiresApproval: boolean,
     preview: string,
     normalizedTarget?: string,
   ): PolicyDecision {
+    const requiresApproval = policyRequiresApproval || command.requires_confirmation;
     if (mode === 'scheduled' && requiresApproval) {
       return this.deny('Scheduled execution cannot satisfy an interactive approval requirement.', preview);
     }
