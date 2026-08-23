@@ -97,7 +97,6 @@ export class MemoryManager implements IMemoryManager {
   updateLongTermMemory(type: string, description: string): void {
     const memory = this.longTermMemories.find(item => item.type === type && item.description === description);
     if (!memory) return;
-
     memory.frequency += 1;
     memory.last_occurrence = formatISO(this.now());
     this.saveLongTermMemories();
@@ -139,7 +138,7 @@ export class MemoryManager implements IMemoryManager {
   }
 
   updatePreferences(prefs: Partial<PreferenceMemory>): void {
-    this.preferences = { ...this.preferences, ...prefs };
+    this.preferences = this.normalizePreferences({ ...this.preferences, ...prefs });
     this.savePreferences();
   }
 
@@ -206,8 +205,27 @@ export class MemoryManager implements IMemoryManager {
       browser: 'chrome',
       voice_mode: true,
       voice_response_mode: 'short',
-      auto_execute_threshold: 0.85,
-      confirmation_required: true,
+    };
+  }
+
+  private normalizePreferences(value: Partial<PreferenceMemory>): PreferenceMemory {
+    const defaults = this.defaultPreferences();
+    const language = value.language === 'ar' || value.language === 'tr' || value.language === 'en'
+      ? value.language
+      : defaults.language;
+    const browser = typeof value.browser === 'string' && value.browser.trim()
+      ? value.browser.trim()
+      : defaults.browser;
+    const voiceMode = typeof value.voice_mode === 'boolean' ? value.voice_mode : defaults.voice_mode;
+    const responseMode = value.voice_response_mode === 'long' || value.voice_response_mode === 'short'
+      ? value.voice_response_mode
+      : defaults.voice_response_mode;
+
+    return {
+      language,
+      browser,
+      voice_mode: voiceMode,
+      voice_response_mode: responseMode,
     };
   }
 
@@ -231,10 +249,8 @@ export class MemoryManager implements IMemoryManager {
       }
 
       this.longTermMemories = this.readJson<LongTermMemory[]>(this.longTermPath()) || [];
-      this.preferences = {
-        ...this.preferences,
-        ...(this.readJson<Partial<PreferenceMemory>>(this.preferencesPath()) || {}),
-      };
+      const persistedPreferences = this.readJson<Partial<PreferenceMemory>>(this.preferencesPath());
+      this.preferences = this.normalizePreferences(persistedPreferences || this.preferences);
     } catch {
       // Memory persistence failures do not expose file contents or secrets.
     }
