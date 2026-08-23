@@ -74,6 +74,7 @@ export interface ConversationContext {
   dev_patch_target?: string;
   dev_patch_content?: string;
   pending_execution?: PendingExecution;
+  pending_schedule_id?: string;
 }
 
 export interface MemoryManager {
