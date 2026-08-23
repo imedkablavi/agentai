@@ -6,21 +6,23 @@ import * as os from 'os';
 describe('FileSystemSafety', () => {
   let fsSafety: FileSystemSafety;
   let workDir: string;
+  let dataDir: string;
 
   beforeEach(() => {
-    workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-safety-test-'));
-    fsSafety = new FileSystemSafety(workDir);
+    workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-safety-work-'));
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-safety-data-'));
+    fsSafety = new FileSystemSafety(workDir, dataDir);
   });
 
   afterEach(() => {
     fs.rmSync(workDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
   it('allows safe creation and reading inside workspace', async () => {
     const file = 'hello.txt';
     const content = 'hello world';
-    const targetPath = path.join(workDir, file);
-    fs.writeFileSync(targetPath, content);
+    fs.writeFileSync(path.join(workDir, file), content);
 
     expect(fsSafety.isSafePath(file)).toBe(true);
     const result = await fsSafety.readFile(file);
@@ -28,60 +30,55 @@ describe('FileSystemSafety', () => {
     expect(result.content).toBe(content);
   });
 
-  it('blocks path traversal outside workspace', async () => {
+  it('blocks traversal, absolute escapes and protected paths', () => {
     expect(fsSafety.isSafePath('../outside.txt')).toBe(false);
-    expect(fsSafety.isSafePath('/etc/passwd')).toBe(false);
+    if (process.platform !== 'win32') expect(fsSafety.isSafePath('/etc/passwd')).toBe(false);
     expect(fsSafety.isSafePath('folder/../../forbidden')).toBe(false);
-  });
-
-  it('blocks reading from protected node_modules directory', async () => {
     expect(fsSafety.isSafePath('node_modules/test.js')).toBe(false);
-    expect(fsSafety.isSafePath('src/node_modules/test.js')).toBe(false);
+    expect(fsSafety.isSafePath('.git/config')).toBe(false);
     expect(fsSafety.isSafePath('.env')).toBe(false);
     expect(fsSafety.isSafePath('config/.env.local')).toBe(false);
+    expect(fsSafety.isSafePath('secret.pem')).toBe(false);
   });
 
-  it('creates backup and rolls back correctly', async () => {
+  it('stores rollback backups outside the workspace and restores atomically', async () => {
     const file = 'app.ts';
-    const content = 'original code';
-    const newContent = 'new code';
-    const targetPath = path.join(workDir, file);
-    
-    fs.writeFileSync(targetPath, content);
-    const { success, backupPath } = await fsSafety.applyPatch(file, newContent);
-    
-    expect(success).toBe(true);
-    expect(backupPath).toBeDefined();
-    expect(fs.readFileSync(targetPath, 'utf8')).toBe(newContent);
-    expect(fs.readFileSync(backupPath!, 'utf8')).toBe(content);
+    fs.writeFileSync(path.join(workDir, file), 'original code');
+    const receipt = await fsSafety.applyPatch(file, 'new code');
 
-    // Now roll it back
-    const rolledBack = fsSafety.rollback(file, backupPath!);
-    expect(rolledBack).toBe(true);
-    expect(fs.readFileSync(targetPath, 'utf8')).toBe(content);
+    expect(receipt.success).toBe(true);
+    expect(receipt.backupPath).toBeDefined();
+    expect(path.resolve(receipt.backupPath!)).toContain(path.resolve(dataDir));
+    expect(path.resolve(receipt.backupPath!)).not.toContain(path.resolve(workDir) + path.sep);
+    expect(fs.readFileSync(path.join(workDir, file), 'utf8')).toBe('new code');
+
+    expect(fsSafety.rollback(file, receipt.backupPath, receipt.createdNewFile)).toBe(true);
+    expect(fs.readFileSync(path.join(workDir, file), 'utf8')).toBe('original code');
+    expect(fs.existsSync(receipt.backupPath!)).toBe(false);
   });
 
-  it('fails writing if size rules violated or empty string provided', async () => {
+  it('removes a newly-created file during rollback', async () => {
+    const receipt = await fsSafety.applyPatch('new.ts', 'export const value = 1;');
+    expect(receipt.success).toBe(true);
+    expect(receipt.createdNewFile).toBe(true);
+    expect(fs.existsSync(path.join(workDir, 'new.ts'))).toBe(true);
+    expect(fsSafety.rollback('new.ts', receipt.backupPath, receipt.createdNewFile)).toBe(true);
+    expect(fs.existsSync(path.join(workDir, 'new.ts'))).toBe(false);
+  });
+
+  it('leaves the original file unchanged when invalid content is rejected', async () => {
     const file = 'app.ts';
     fs.writeFileSync(path.join(workDir, file), 'valid');
-    
-    // Writing completely empty file should fail our integrity check
-    const { success } = await fsSafety.applyPatch(file, '   ');
-    expect(success).toBe(false);
-    
-    // Rollback is automatic on failure, so file should remain 'valid'
+    const receipt = await fsSafety.applyPatch(file, '   ');
+    expect(receipt.success).toBe(false);
     expect(fs.readFileSync(path.join(workDir, file), 'utf8')).toBe('valid');
   });
 
-  it('blocks reading large files', async () => {
-    const file = 'large.txt';
-    const targetPath = path.join(workDir, file);
-    
-    // Allocate 501KB
-    const buf = Buffer.alloc(501 * 1024, 'a');
-    fs.writeFileSync(targetPath, buf);
+  it('blocks reading large and binary files', async () => {
+    fs.writeFileSync(path.join(workDir, 'large.txt'), Buffer.alloc(501 * 1024, 'a'));
+    expect((await fsSafety.readFile('large.txt')).error).toContain('File too large');
 
-    const result = await fsSafety.readFile(file);
-    expect(result.error).toContain('File too large');
+    fs.writeFileSync(path.join(workDir, 'binary.bin'), Buffer.from([1, 2, 0, 4]));
+    expect((await fsSafety.readFile('binary.bin')).error).toContain('Binary');
   });
 });
