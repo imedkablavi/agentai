@@ -286,6 +286,7 @@ export class AIAssistant {
       const taskId = context.pending_schedule_id;
       const enabled = this.scheduler.enableTask(taskId);
       this.contextManager.updateContext({ pending_schedule_id: undefined, awaiting_confirmation: false, awaiting_followup: false });
+      this.contextManager.setState('IDLE');
       this.audit.record({ action: 'scheduler_enable', outcome: enabled ? 'success' : 'failure', mode: 'interactive', target: taskId });
       return this.message(enabled ? 'Scheduled task enabled.' : 'Scheduled task no longer exists.', false, []);
     }
@@ -302,7 +303,10 @@ export class AIAssistant {
       return this.message('Approval expired. Re-issue the original command to generate a new preview.', false, []);
     }
 
-    this.contextManager.updateContext({ pending_execution: undefined, awaiting_confirmation: false, awaiting_followup: false });
+    // Keep awaiting_confirmation true through the executor call so a staged
+    // dev-fix transaction cannot be confused with a new proposal. The approval
+    // is still bound to pending.command and is cleared immediately afterward.
+    this.contextManager.updateContext({ pending_execution: undefined });
     this.audit.record({
       action: pending.command.action,
       target: pending.command.target,
@@ -313,6 +317,14 @@ export class AIAssistant {
     });
 
     const result = await this.executor.execute({ ...pending.command, requires_confirmation: false }, this.getLanguageFromContext());
+    this.contextManager.updateContext({
+      awaiting_confirmation: false,
+      awaiting_followup: false,
+      ...(pending.command.action === 'dev_fix' && !result.success
+        ? { dev_patch_target: undefined, dev_patch_content: undefined }
+        : {}),
+    });
+    this.contextManager.setState('IDLE');
     return this.renderResult(result, undefined, undefined, input);
   }
 
