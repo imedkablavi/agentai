@@ -29,16 +29,16 @@ export class SystemSkill implements Skill {
   private parseSystemCommand(text: string): string | null {
     const commands = {
       ar: {
-        shutdown: [/أطفئ\s+الجهاز/i, /أطفئ\s+الكمبيوتر/i, /إيقاف\s+التشغيل/i],
-        restart: [/أعد\s+التشغيل/i, /إعادة\s+التشغيل/i, /restart/i],
-        lock: [/قفل\s+الشاشة/i, /اقفل\s+الشاشة/i, /lock/i],
-        sleep: [/وضع\s+السبات/i, /sleep/i, /hibernate/i],
+        shutdown: [/^\s*أطفئ\s+(?:الجهاز|الكمبيوتر)\s*$/i, /^\s*إيقاف\s+التشغيل\s*$/i],
+        restart: [/^\s*(?:أعد|إعادة)\s+التشغيل\s*$/i, /^\s*restart\s*$/i],
+        lock: [/^\s*(?:قفل|اقفل)\s+الشاشة\s*$/i, /^\s*lock\s*$/i],
+        sleep: [/^\s*وضع\s+السبات\s*$/i, /^\s*(?:sleep|hibernate)\s*$/i],
       },
       tr: {
-        shutdown: [/bilgisayarı\s+kapat/i, /kapat\s+sistem/i],
-        restart: [/yeniden\s+başlat/i, /restart/i, /reboot/i],
-        lock: [/ekranı\s+kilit/i, /kilit\s+ekran/i, /lock/i],
-        sleep: [/uyku\s+modu/i, /sleep/i, /hibernate/i],
+        shutdown: [/^\s*bilgisayarı\s+kapat\s*$/i, /^\s*kapat\s+sistem\s*$/i],
+        restart: [/^\s*yeniden\s+başlat\s*$/i, /^\s*(?:restart|reboot)\s*$/i],
+        lock: [/^\s*ekranı\s+kilit\s*$/i, /^\s*kilit\s+ekran\s*$/i, /^\s*lock\s*$/i],
+        sleep: [/^\s*uyku\s+modu\s*$/i, /^\s*(?:sleep|hibernate)\s*$/i],
       },
       en: {
         shutdown: [/^\s*(?:shutdown|shut\s+down|power\s+off)(?:\s+(?:the\s+)?(?:computer|pc|system))?\s*$/i],
