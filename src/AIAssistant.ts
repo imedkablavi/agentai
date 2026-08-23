@@ -12,7 +12,6 @@ import { ContextManager } from './context/ContextManager';
 import { IntentEngine } from './intent/IntentEngine';
 import { SkillRouter } from './skills/SkillRouter';
 import { ResponseGenerator } from './response/ResponseGenerator';
-import { formatISO } from 'date-fns';
 import { randomUUID } from 'crypto';
 import { CommandExecutor } from './execution/CommandExecutor';
 import { SchedulerManager } from './scheduler/SchedulerManager';
@@ -303,9 +302,6 @@ export class AIAssistant {
       return this.message('Approval expired. Re-issue the original command to generate a new preview.', false, []);
     }
 
-    // Keep awaiting_confirmation true through the executor call so a staged
-    // dev-fix transaction cannot be confused with a new proposal. The approval
-    // is still bound to pending.command and is cleared immediately afterward.
     this.contextManager.updateContext({ pending_execution: undefined });
     this.audit.record({
       action: pending.command.action,
@@ -328,26 +324,56 @@ export class AIAssistant {
     return this.renderResult(result, undefined, undefined, input);
   }
 
-  private previewSchedule(intent: Intent, context: ConversationContext): AssistantOutput {
+  private async previewSchedule(intent: Intent, context: ConversationContext): Promise<AssistantOutput> {
     const at = String((intent.entities as any).at || '08:00');
     if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(at)) {
       return this.message('Schedule time must use HH:MM (24-hour format).', false, []);
     }
 
-    const task = this.scheduler.addTask(intent, context, { type: 'daily', at });
+    const taskText = String(intent.entities.query || '').trim();
+    if (!taskText || taskText === at) {
+      return this.message(this.localized(intent, 'حدّد المهمة المطلوب جدولتها بوضوح.', 'Zamanlanacak görevi açıkça belirt.', 'Specify the task to schedule explicitly.'), false, []);
+    }
+
+    let scheduledIntent = await this.intentEngine.classify(taskText, context);
+    scheduledIntent = await this.intentEngine.extractEntities(taskText, scheduledIntent);
+    scheduledIntent.confidence = this.intentEngine.calculateConfidence(scheduledIntent, context);
+    if (scheduledIntent.name === 'schedule_task' || scheduledIntent.name === 'stop_tasks') {
+      return this.message('Nested scheduler control is not allowed.', false, []);
+    }
+
+    const skill = this.skillRouter.route(scheduledIntent, context);
+    if (!skill) {
+      return this.message(this.localized(intent, 'المهمة المجدولة غير واضحة أو غير مدعومة.', 'Zamanlanmış görev belirsiz veya desteklenmiyor.', 'The scheduled task is ambiguous or unsupported.'), false, []);
+    }
+
+    const command = await skill.execute(scheduledIntent, context);
+    const scheduledDecision = this.policy.evaluate(command, context, 'scheduled');
+    if (!scheduledDecision.allowed || scheduledDecision.requiresApproval) {
+      this.audit.record({
+        action: command.action,
+        target: command.target,
+        outcome: 'denied',
+        mode: 'scheduled',
+        detail: { reason: scheduledDecision.reason, phase: 'schedule_creation' },
+      });
+      return this.message(`This task cannot be scheduled: ${scheduledDecision.reason}`, false, []);
+    }
+
+    const task = this.scheduler.addTask(scheduledIntent, context, { type: 'daily', at });
     this.contextManager.updateContext({
       pending_schedule_id: task.id,
       awaiting_confirmation: true,
       awaiting_followup: true,
     });
     this.contextManager.setState('AWAITING_CONFIRMATION');
-    this.audit.record({ action: 'scheduler_enable', outcome: 'approval_required', mode: 'interactive', target: task.id, detail: { trigger: `daily ${at}` } });
+    this.audit.record({ action: 'scheduler_enable', outcome: 'approval_required', mode: 'interactive', target: task.id, detail: { trigger: `daily ${at}`, action: command.action } });
 
     const message = this.localized(
       intent,
-      `معاينة: تشغيل المهمة يوميًا الساعة ${at}. لم يتم تفعيلها بعد. هل توافق؟`,
-      `Önizleme: görev her gün ${at} saatinde çalışacak. Henüz etkin değil. Onaylıyor musun?`,
-      `Preview: run this task daily at ${at}. It is not enabled yet. Approve?`,
+      `معاينة: تشغيل ${command.action} يوميًا الساعة ${at}. لم يتم تفعيلها بعد. هل توافق؟`,
+      `Önizleme: ${command.action} görevi her gün ${at} saatinde çalışacak. Henüz etkin değil. Onaylıyor musun?`,
+      `Preview: run ${command.action} daily at ${at}. It is not enabled yet. Approve?`,
     );
     return this.message(message, true, this.approvalActions(intent.language as 'ar' | 'tr' | 'en'));
   }
@@ -408,7 +434,6 @@ export class AIAssistant {
   }
 
   private renderResult(result: SkillResult, intent?: Intent, skillName?: string, userInput?: string): AssistantOutput {
-    const context = this.contextManager.getContext();
     if (result.success && skillName) {
       this.contextManager.updateActiveSkill(skillName, intent?.entities.query);
       if (intent) this.contextManager.setLastAction(intent.name);
@@ -420,16 +445,6 @@ export class AIAssistant {
       : this.responseGenerator.generateResponse(result, current);
     const followUp = this.responseGenerator.generateFollowUp(result, current);
     if (followUp) response += `\n\n${followUp}`;
-
-    if (intent && intent.name !== 'memory_command' && this.memoryManager.shouldStoreMemory(intent, current)) {
-      this.memoryManager.addLongTermMemory({
-        type: 'habit',
-        description: `Explicitly remembered usage pattern: ${intent.name}`,
-        frequency: 1,
-        last_occurrence: formatISO(new Date()),
-        metadata: {},
-      });
-    }
 
     if (userInput) this.contextManager.addToHistory(userInput, response);
     return {
