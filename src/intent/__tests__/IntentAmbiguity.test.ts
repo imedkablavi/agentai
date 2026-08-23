@@ -21,8 +21,8 @@ async function routed(text: string): Promise<{ intent: Intent; skillName: string
 
 describe('prompt and intent ambiguity', () => {
   it('does not route pronoun-only execution requests', async () => {
-    const result = await routed('do it');
-    expect(result.skillName).toBeNull();
+    expect((await routed('do it')).skillName).toBeNull();
+    expect((await routed('نفذها')).skillName).toBeNull();
   });
 
   it('does not route application commands without an allowlisted application', async () => {
@@ -30,13 +30,15 @@ describe('prompt and intent ambiguity', () => {
     expect((await routed('افتح هذا')).skillName).toBeNull();
   });
 
-  it('rejects compound text that embeds a destructive system verb', async () => {
-    const result = await routed('shutdown and delete everything');
-    expect(result.skillName).toBeNull();
+  it('rejects compound text that embeds a system verb plus another operation', async () => {
+    expect((await routed('shutdown and delete everything')).skillName).toBeNull();
+    expect((await routed('أطفئ الجهاز واحذف الملفات')).skillName).toBeNull();
+    expect((await routed('bilgisayarı kapat ve dosyaları sil')).skillName).toBeNull();
   });
 
-  it('still recognizes a narrow explicit system command semantically', async () => {
-    const result = await routed('shutdown');
-    expect(result.skillName).toBe('SystemSkill');
+  it('still recognizes narrow explicit system commands semantically', async () => {
+    expect((await routed('shutdown')).skillName).toBe('SystemSkill');
+    expect((await routed('أطفئ الجهاز')).skillName).toBe('SystemSkill');
+    expect((await routed('bilgisayarı kapat')).skillName).toBe('SystemSkill');
   });
 });
