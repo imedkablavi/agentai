@@ -55,6 +55,12 @@ export interface PreferenceMemory {
   confirmation_required: boolean;
 }
 
+export interface MemoryPrivacyConfig {
+  retention_days: number;
+  persist_short_term: boolean;
+  auto_store_patterns: boolean;
+}
+
 export interface ConversationContext {
   state: ConversationState;
   active_skill?: string;
@@ -67,20 +73,27 @@ export interface ConversationContext {
   selection_context?: SelectionContext | null;
   dev_patch_target?: string;
   dev_patch_content?: string;
+  pending_execution?: PendingExecution;
 }
 
 export interface MemoryManager {
   getShortTermMemory(): ShortTermMemory | null;
   updateShortTermMemory(data: Partial<ShortTermMemory>): void;
-  
+  clearShortTermMemory(): void;
+
   getLongTermMemories(): LongTermMemory[];
   addLongTermMemory(memory: LongTermMemory): void;
   updateLongTermMemory(type: string, description: string): void;
-  pruneLongTermMemories(cutoffDays: number): void;
-  
+  pruneLongTermMemories(cutoffDays?: number): void;
+  deleteLongTermMemory(id: string): boolean;
+  clearLongTermMemories(): void;
+  clearAllMemories(): void;
+
   getPreferences(): PreferenceMemory;
   updatePreferences(prefs: Partial<PreferenceMemory>): void;
-  
+
+  getPrivacyConfig(): MemoryPrivacyConfig;
+  updatePrivacyConfig(config: Partial<MemoryPrivacyConfig>): void;
   shouldStoreMemory(intent: Intent, context: ConversationContext): boolean;
 }
 
@@ -88,7 +101,7 @@ export interface ContextManager {
   getContext(): ConversationContext;
   updateContext(updates: Partial<ConversationContext>): void;
   clearContext(): void;
-  
+
   isFollowUpRequired(intent: Intent): boolean;
   getMissingContext(intent: Intent): string[];
   setState(state: ConversationState): void;
@@ -116,6 +129,7 @@ export interface ResponseGenerator {
   generateErrorResponse(error: ErrorResponse, language: 'ar' | 'tr' | 'en'): string;
 }
 
+/** @deprecated Confidence is a routing signal, not an authorization grant. */
 export interface SafetyConfig {
   min_confidence_threshold: number;
   destructive_commands: string[];
@@ -143,6 +157,14 @@ export interface ExecutionCommand {
   params?: Record<string, any>;
   risk_level: 'low' | 'medium' | 'high';
   requires_confirmation: boolean;
+}
+
+export interface PendingExecution {
+  id: string;
+  command: ExecutionCommand;
+  preview: string;
+  created_at: string;
+  expires_at: string;
 }
 
 export interface ErrorResponse {
