@@ -1,17 +1,35 @@
-const SENSITIVE_KEY = /(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|secret|cookie|session|credential|private[_-]?key)/i;
+const SENSITIVE_KEY = /(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|secret|cookie|session|credential|private[_-]?key|client[_-]?secret)/i;
 
 const STRING_REDACTIONS: Array<[RegExp, string]> = [
+  [/-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/gi, '[REDACTED_PRIVATE_KEY]'],
   [/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]'],
   [/\b(?:sk|rk|pk)-[A-Za-z0-9_-]{12,}\b/g, '[REDACTED_TOKEN]'],
   [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, '[REDACTED_GITHUB_TOKEN]'],
+  [/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, '[REDACTED_GITHUB_TOKEN]'],
+  [/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[REDACTED_AWS_ACCESS_KEY]'],
+  [/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, '[REDACTED_SLACK_TOKEN]'],
   [/\bAIza[0-9A-Za-z_-]{20,}\b/g, '[REDACTED_API_KEY]'],
   [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED_JWT]'],
   [/(https?:\/\/[^\s:/]+:)[^@\s]+@/gi, '$1[REDACTED]@'],
-  [/((?:api[_-]?key|token|password|passwd|secret|cookie|authorization)\s*[:=]\s*)[^\s,;]+/gi, '$1[REDACTED]'],
+  [/((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|passwd|secret|client[_-]?secret|cookie|authorization)\s*[:=]\s*)[^\s,;]+/gi, '$1[REDACTED]'],
 ];
 
-export function redactString(input: string, maxLength = 2000): string {
-  let output = input;
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function minimizePrivatePaths(value: string, privateRoots?: string[]): string {
+  const roots = privateRoots || [process.env.HOME, process.env.USERPROFILE].filter((item): item is string => Boolean(item));
+  let output = value;
+  for (const root of new Set(roots.filter(Boolean))) {
+    if (root.length < 3) continue;
+    output = output.replace(new RegExp(escapeRegExp(root), 'gi'), '~');
+  }
+  return output;
+}
+
+export function redactString(input: string, maxLength = 2000, privateRoots?: string[]): string {
+  let output = minimizePrivatePaths(input, privateRoots);
   for (const [pattern, replacement] of STRING_REDACTIONS) {
     output = output.replace(pattern, replacement);
   }
