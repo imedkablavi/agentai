@@ -22,16 +22,30 @@ describe('AIAssistant command-bound approval flow', () => {
     (assistant as any).executor.execute = execute;
 
     (assistant as any).llm.infer = jest.fn(async (text: string) => {
-      if (text.trim().toLowerCase() !== 'shutdown') return null;
-      const intent: Intent = {
-        name: 'system_command',
-        confidence: 1,
-        language: 'en',
-        context_required: false,
-        entities: {},
-        raw_text: 'shutdown',
-      };
-      return intent;
+      const normalized = text.trim().toLowerCase();
+      if (normalized === 'shutdown') {
+        const intent: Intent = {
+          name: 'system_command',
+          confidence: 1,
+          language: 'en',
+          context_required: false,
+          entities: {},
+          raw_text: 'shutdown',
+        };
+        return intent;
+      }
+      if (normalized === 'stop tasks') {
+        const intent: Intent = {
+          name: 'stop_tasks',
+          confidence: 1,
+          language: 'en',
+          context_required: false,
+          entities: {},
+          raw_text: 'stop tasks',
+        };
+        return intent;
+      }
+      return null;
     });
   });
 
@@ -45,7 +59,7 @@ describe('AIAssistant command-bound approval flow', () => {
   it('does not execute a destructive system command solely because confidence is high', async () => {
     const preview = await assistant.processInput('shutdown');
     expect(preview.requiresFollowUp).toBe(true);
-    expect(preview.response).toContain('preview');
+    expect(preview.response.toLowerCase()).toContain('preview');
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -65,5 +79,26 @@ describe('AIAssistant command-bound approval flow', () => {
     const cancelled = await assistant.processInput('Cancel');
     expect(cancelled.response).toContain('cancelled');
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('does not disable schedules before a command-bound approval', async () => {
+    const disableAll = jest.spyOn((assistant as any).scheduler, 'disableAll');
+
+    const preview = await assistant.processInput('stop tasks');
+    expect(preview.requiresFollowUp).toBe(true);
+    expect(disableAll).not.toHaveBeenCalled();
+    expect(preview.context.pending_execution?.command.action).toBe('scheduler_disable_all');
+
+    await assistant.processInput('Yes');
+    expect(disableAll).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized input before LLM or memory processing', async () => {
+    const infer = (assistant as any).llm.infer as jest.Mock;
+    infer.mockClear();
+    const result = await assistant.processInput('x'.repeat(8001));
+    expect(result.response).toContain('8,000');
+    expect(infer).not.toHaveBeenCalled();
   });
 });
