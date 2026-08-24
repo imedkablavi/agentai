@@ -21,7 +21,7 @@ const intent: Intent = {
   raw_text: 'search for status page',
 };
 
-describe('SchedulerManager privacy and enablement', () => {
+describe('SchedulerManager privacy and execution semantics', () => {
   let dataDir: string;
   let scheduler: SchedulerManager;
 
@@ -32,6 +32,7 @@ describe('SchedulerManager privacy and enablement', () => {
 
   afterEach(() => {
     scheduler.stop();
+    jest.useRealTimers();
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
@@ -67,5 +68,53 @@ describe('SchedulerManager privacy and enablement', () => {
     scheduler.clear();
     expect(scheduler.listTasks()).toEqual([]);
     expect(fs.existsSync(path.join(dataDir, 'scheduler', 'tasks.json'))).toBe(false);
+  });
+
+  it('runs a once task at most one time and persists it disabled', async () => {
+    jest.useFakeTimers();
+    let now = new Date('2026-08-24T10:00:00.000Z');
+    scheduler = new SchedulerManager(() => now, dataDir);
+    const task = scheduler.addTask(intent, context, { type: 'once', at: '2026-08-24T10:00:01.000Z' });
+    expect(scheduler.enableTask(task.id)).toBe(true);
+
+    const onDue = jest.fn().mockResolvedValue(undefined);
+    scheduler.start(5, onDue);
+    now = new Date('2026-08-24T10:00:02.000Z');
+    await jest.advanceTimersByTimeAsync(5_000);
+
+    expect(onDue).toHaveBeenCalledTimes(1);
+    expect(scheduler.listTasks()[0].enabled).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(onDue).toHaveBeenCalledTimes(1);
+
+    const reloaded = new SchedulerManager(() => now, dataDir);
+    expect(reloaded.listTasks()[0].enabled).toBe(false);
+    reloaded.stop();
+  });
+
+  it('does not enable an already-expired once task', () => {
+    const task = scheduler.addTask(intent, context, { type: 'once', at: '2026-08-24T09:59:59.000Z' });
+    expect(scheduler.enableTask(task.id)).toBe(false);
+    expect(scheduler.listTasks()[0].enabled).toBe(false);
+  });
+
+  it('does not overlap scheduler ticks while a prior callback is still running', async () => {
+    jest.useFakeTimers();
+    let now = new Date('2026-08-24T10:00:00.000Z');
+    scheduler = new SchedulerManager(() => now, dataDir);
+    const task = scheduler.addTask(intent, context, { type: 'interval', minutes: 1 });
+    expect(scheduler.enableTask(task.id)).toBe(true);
+
+    let release: (() => void) | undefined;
+    const onDue = jest.fn(() => new Promise<void>(resolve => { release = resolve; }));
+    scheduler.start(5, onDue);
+    now = new Date('2026-08-24T10:02:00.000Z');
+
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(onDue).toHaveBeenCalledTimes(1);
+
+    release?.();
+    await Promise.resolve();
   });
 });
