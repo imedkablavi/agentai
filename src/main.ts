@@ -13,6 +13,7 @@ export class AgentAICLI {
   private readonly voice = new ConsoleVoiceOutputAdapter();
   private readonly voiceController: VoiceController;
   private shuttingDown = false;
+  private interfaceClosed = false;
 
   constructor() {
     this.assistant = new AIAssistant();
@@ -37,7 +38,10 @@ export class AgentAICLI {
       }
     });
 
-    this.rl.on('close', () => this.shutdown());
+    this.rl.on('close', () => {
+      this.interfaceClosed = true;
+      this.shutdown();
+    });
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
   }
@@ -173,16 +177,17 @@ Local commands:
   audit clear                   Preview audit deletion
   tasks                         List scheduled tasks
   tasks clear                   Preview deleting all scheduled tasks
-  ptt <path>                    Process an audio file through push-to-talk
+  ptt <path>                    Process a workspace audio file through push-to-talk
   exit | quit                   Exit
 
 Execution model:
   - Confidence affects interpretation only; it never grants permission.
   - Impactful actions show a preview and require an exact Yes/Evet/نعم approval.
   - A new unrelated input cancels a pending approval rather than reusing it.
-  - File/developer actions are restricted to the current workspace.
+  - File/developer/voice-file actions are restricted to the current workspace.
   - Windows power/session controls are implemented only on Windows.
   - Linux supports the CLI, workspace/file operations, search, and best-effort mapped app launch/close.
+  - Network Edge TTS is disabled unless AGENTAI_ENABLE_EDGE_TTS=true is explicitly set.
 `);
   }
 
@@ -196,7 +201,7 @@ Execution model:
     if (this.shuttingDown) return;
     this.shuttingDown = true;
     this.assistant.shutdown();
-    if (!this.rl.closed) this.rl.close();
+    if (!this.interfaceClosed) this.rl.close();
   }
 }
 
