@@ -36,9 +36,28 @@ describe('prompt and intent ambiguity', () => {
     expect((await routed('bilgisayarı kapat ve dosyaları sil')).skillName).toBeNull();
   });
 
-  it('still recognizes narrow explicit system commands semantically', async () => {
+  it('routes narrow explicit system commands through SystemSkill', async () => {
     expect((await routed('shutdown')).skillName).toBe('SystemSkill');
     expect((await routed('أطفئ الجهاز')).skillName).toBe('SystemSkill');
     expect((await routed('bilgisayarı kapat')).skillName).toBe('SystemSkill');
+  });
+
+  it('gives specialized file intents precedence over broad open patterns', async () => {
+    const english = await routed('open file src/main.ts');
+    expect(english.intent.name).toBe('open_file');
+    expect(english.skillName).toBe('PersonalAssistantSkill');
+
+    const arabic = await routed('افتح الملف src/main.ts');
+    expect(arabic.intent.name).toBe('open_file');
+    expect(arabic.skillName).toBe('PersonalAssistantSkill');
+  });
+
+  it('extracts Turkish daily schedule task and time deterministically', async () => {
+    const engine = new IntentEngine();
+    let intent = await engine.classify('her gün saat 09:30 firefox aç', context);
+    intent = await engine.extractEntities(intent.raw_text, intent);
+    expect(intent.name).toBe('schedule_task');
+    expect(intent.entities.at).toBe('09:30');
+    expect(intent.entities.query).toBe('firefox aç');
   });
 });
