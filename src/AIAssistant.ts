@@ -60,6 +60,10 @@ export class AIAssistant {
   async processInput(userInput: string): Promise<AssistantOutput> {
     const input = userInput.trim();
     if (!input) return this.message('Input is empty.', false, []);
+    if (input.length > 8000) {
+      this.audit.record({ action: 'assistant_input', outcome: 'denied', mode: 'interactive', detail: { reason: 'input_length_limit', characters: input.length } });
+      return this.message('Input exceeds the 8,000 character processing limit.', false, []);
+    }
 
     try {
       const pending = await this.handlePendingApproval(input);
@@ -79,11 +83,7 @@ export class AIAssistant {
       });
 
       if (intent.name === 'schedule_task') return this.previewSchedule(intent, context);
-      if (intent.name === 'stop_tasks') {
-        this.scheduler.disableAll();
-        this.audit.record({ action: 'scheduler_disable_all', outcome: 'success', mode: 'interactive' });
-        return this.message(this.localized(intent, 'تم إيقاف جميع المهام المجدولة.', 'Tüm zamanlanmış görevler durduruldu.', 'All scheduled tasks are disabled.'), false, []);
-      }
+      if (intent.name === 'stop_tasks') return this.previewSchedulerDisable(intent);
 
       const skill = this.skillRouter.route(intent, context);
       if (!skill) {
@@ -156,7 +156,7 @@ export class AIAssistant {
     if (!task.enabled) return;
 
     try {
-      const context = task.context_snapshot as ConversationContext;
+      const context = task.context_snapshot;
       let intent = await this.intentEngine.extractEntities(task.intent.raw_text, task.intent);
       intent.confidence = this.intentEngine.calculateConfidence(intent, context);
       const skill = this.skillRouter.route(intent, context);
@@ -287,7 +287,7 @@ export class AIAssistant {
       this.contextManager.updateContext({ pending_schedule_id: undefined, awaiting_confirmation: false, awaiting_followup: false });
       this.contextManager.setState('IDLE');
       this.audit.record({ action: 'scheduler_enable', outcome: enabled ? 'success' : 'failure', mode: 'interactive', target: taskId });
-      return this.message(enabled ? 'Scheduled task enabled.' : 'Scheduled task no longer exists.', false, []);
+      return this.message(enabled ? 'Scheduled task enabled.' : 'Scheduled task no longer exists or is no longer valid.', false, []);
     }
 
     const pending = context.pending_execution;
@@ -296,7 +296,8 @@ export class AIAssistant {
       return this.message('No command-bound approval is available. Nothing was executed.', false, []);
     }
 
-    if (new Date(pending.expires_at).getTime() <= Date.now()) {
+    const expiresAt = new Date(pending.expires_at).getTime();
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       this.cancelPendingState('approval_expired');
       this.audit.record({ action: pending.command.action, outcome: 'cancelled', mode: 'interactive', approval_id: pending.id, detail: { reason: 'expired' } });
       return this.message('Approval expired. Re-issue the original command to generate a new preview.', false, []);
@@ -312,6 +313,14 @@ export class AIAssistant {
       detail: { approved_preview: pending.preview },
     });
 
+    if (pending.command.action === 'scheduler_disable_all') {
+      this.scheduler.disableAll();
+      this.contextManager.updateContext({ awaiting_confirmation: false, awaiting_followup: false });
+      this.contextManager.setState('IDLE');
+      this.audit.record({ action: 'scheduler_disable_all', outcome: 'success', mode: 'interactive', approval_id: pending.id });
+      return this.message(this.schedulerDisabledMessage(this.getLanguageFromContext()), false, []);
+    }
+
     const result = await this.executor.execute({ ...pending.command, requires_confirmation: false }, this.getLanguageFromContext());
     this.contextManager.updateContext({
       awaiting_confirmation: false,
@@ -324,8 +333,25 @@ export class AIAssistant {
     return this.renderResult(result, undefined, undefined, input);
   }
 
+  private previewSchedulerDisable(intent: Intent): AssistantOutput {
+    const command: ExecutionCommand = {
+      action: 'scheduler_disable_all',
+      risk_level: 'medium',
+      requires_confirmation: true,
+    };
+    const decision = this.policy.evaluate(command, this.contextManager.getContext(), 'interactive');
+    this.audit.record({
+      action: command.action,
+      outcome: decision.allowed ? (decision.requiresApproval ? 'approval_required' : 'allowed') : 'denied',
+      mode: 'interactive',
+      detail: { reason: decision.reason },
+    });
+    if (!decision.allowed) return this.message(`Blocked by execution policy: ${decision.reason}`, false, []);
+    return this.stageApproval(command, decision.preview, intent.language as 'ar' | 'tr' | 'en');
+  }
+
   private async previewSchedule(intent: Intent, context: ConversationContext): Promise<AssistantOutput> {
-    const at = String((intent.entities as any).at || '08:00');
+    const at = String(intent.entities.at || '08:00');
     if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(at)) {
       return this.message('Schedule time must use HH:MM (24-hour format).', false, []);
     }
@@ -472,6 +498,14 @@ export class AIAssistant {
 
   private localized(intent: Intent, ar: string, tr: string, en: string): string {
     return intent.language === 'ar' ? ar : intent.language === 'tr' ? tr : en;
+  }
+
+  private schedulerDisabledMessage(language: 'ar' | 'tr' | 'en'): string {
+    return language === 'ar'
+      ? 'تم تعطيل جميع المهام المجدولة بعد الموافقة.'
+      : language === 'tr'
+        ? 'Tüm zamanlanmış görevler onaydan sonra devre dışı bırakıldı.'
+        : 'All scheduled tasks were disabled after approval.';
   }
 
   private getLanguageFromContext(): 'ar' | 'tr' | 'en' {
