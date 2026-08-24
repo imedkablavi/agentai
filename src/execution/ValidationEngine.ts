@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { redactedError, redactString } from '../security/Redaction';
+import { buildChildProcessEnv } from '../security/ChildProcessEnv';
 
 const execFileAsync = promisify(execFile);
 
@@ -128,9 +129,20 @@ export class ValidationEngine {
       if (ext === '.ts' || ext === '.tsx') {
         if (pkg.scripts?.typecheck) {
           await this.run(this.npmExecutable(), ['run', 'typecheck'], scopedRoot, 20_000);
-        } else {
-          await this.run(this.npxExecutable(), ['tsc', '--noEmit', '--isolatedModules', absolute], scopedRoot, 20_000);
+          return { success: true, stderr: '', stdout: 'TypeScript validation passed', confidence: 'high' };
         }
+
+        const localTsc = this.resolveLocalNodeCli(scopedRoot, 'typescript', ['bin', 'tsc']);
+        if (!localTsc) {
+          return {
+            success: true,
+            stderr: '',
+            stdout: 'No local TypeScript validator is installed; validation confidence is partial.',
+            confidence: 'partial',
+          };
+        }
+
+        await this.run(process.execPath, [localTsc, '--noEmit', '--isolatedModules', absolute], scopedRoot, 20_000);
         return { success: true, stderr: '', stdout: 'TypeScript validation passed', confidence: 'high' };
       }
 
@@ -195,8 +207,17 @@ export class ValidationEngine {
       timeout,
       maxBuffer: 1024 * 1024,
       windowsHide: true,
-      env: { ...process.env, npm_config_yes: 'false' },
+      env: buildChildProcessEnv(),
     });
+  }
+
+  private resolveLocalNodeCli(scopeRoot: string, packageName: string, scriptParts: string[]): string | null {
+    const roots = scopeRoot === this.workspaceRoot ? [scopeRoot] : [scopeRoot, this.workspaceRoot];
+    for (const root of roots) {
+      const candidate = path.join(root, 'node_modules', packageName, ...scriptParts);
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+    }
+    return null;
   }
 
   private safeAbsolutePath(filePath: string): string | null {
@@ -211,5 +232,4 @@ export class ValidationEngine {
   }
 
   private npmExecutable(): string { return process.platform === 'win32' ? 'npm.cmd' : 'npm'; }
-  private npxExecutable(): string { return process.platform === 'win32' ? 'npx.cmd' : 'npx'; }
 }
