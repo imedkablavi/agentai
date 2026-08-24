@@ -99,11 +99,15 @@ export class ExecutionPolicy {
       const index = Number(command.params?.index || 0);
       const selection = context.selection_context;
       if (!Number.isInteger(index) || index < 1 || !selection || index > selection.items.length) {
-        return this.deny('Selection is missing, expired, or outside the current selection scope.');
+        return this.deny('Selection is missing or outside the current selection scope.');
+      }
+      const expiresAt = new Date(selection.expires_at).getTime();
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        return this.deny('Selection has expired and must be generated again.');
       }
       const url = String(selection.items[index - 1]?.data?.url || '');
-      if (!this.isSafeExternalUrl(url)) return this.deny('Selected URL is not an allowed HTTP(S) destination.');
-      return this.finish(command, mode, false, `Open selected HTTP(S) result #${index}`);
+      if (!this.isSafeExternalUrl(url)) return this.deny('Selected URL is not an allowed public HTTP(S) destination.');
+      return this.finish(command, mode, false, `Open selected public HTTP(S) result #${index}`);
     }
 
     if (command.action === 'web_search' || command.action === 'youtube_search') {
@@ -159,10 +163,38 @@ export class ExecutionPolicy {
   private isSafeExternalUrl(raw: string): boolean {
     try {
       const url = new URL(raw);
-      return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password;
+      if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) return false;
+      return !this.isLocalOrPrivateHost(url.hostname);
     } catch {
       return false;
     }
+  }
+
+  private isLocalOrPrivateHost(rawHostname: string): boolean {
+    const hostname = rawHostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
+
+    const octets = hostname.split('.').map(part => Number(part));
+    if (octets.length === 4 && octets.every(value => Number.isInteger(value) && value >= 0 && value <= 255)) {
+      const [a, b] = octets;
+      if (a === 0 || a === 10 || a === 127 || a >= 224) return true;
+      if (a === 100 && b >= 64 && b <= 127) return true;
+      if (a === 169 && b === 254) return true;
+      if (a === 172 && b >= 16 && b <= 31) return true;
+      if (a === 192 && b === 168) return true;
+      if (a === 198 && (b === 18 || b === 19)) return true;
+    }
+
+    if (hostname.includes(':')) {
+      if (hostname === '::' || hostname === '::1') return true;
+      if (/^(?:fc|fd)/i.test(hostname)) return true;
+      if (/^fe[89ab]/i.test(hostname)) return true;
+      if (hostname.startsWith('::ffff:')) {
+        const mapped = hostname.slice('::ffff:'.length);
+        return this.isLocalOrPrivateHost(mapped);
+      }
+    }
+    return false;
   }
 
   private finish(
