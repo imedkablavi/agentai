@@ -111,6 +111,35 @@ describe('ExecutionPolicy', () => {
     expect(decision.requiresApproval).toBe(true);
   });
 
+  it('expires selection contexts before URL opening', () => {
+    const expired = context({
+      selection_context: {
+        type: 'search_results',
+        expires_at: new Date(Date.now() - 1000).toISOString(),
+        items: [{ id: '1', label: 'expired', data: { url: 'https://example.com/' } }],
+      },
+    });
+    const decision = policy.evaluate(command({ action: 'select_item', params: { index: 1 } }), expired);
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toContain('expired');
+  });
+
+  it('allows public selection URLs but rejects loopback and private-network targets', () => {
+    const selection = (url: string): ConversationContext => context({
+      selection_context: {
+        type: 'search_results',
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        items: [{ id: '1', label: 'result', data: { url } }],
+      },
+    });
+    const select = command({ action: 'select_item', params: { index: 1 } });
+
+    expect(policy.evaluate(select, selection('https://example.com/')).allowed).toBe(true);
+    expect(policy.evaluate(select, selection('http://127.0.0.1/admin')).allowed).toBe(false);
+    expect(policy.evaluate(select, selection('http://192.168.1.10/')).allowed).toBe(false);
+    expect(policy.evaluate(select, selection('http://[::1]/')).allowed).toBe(false);
+  });
+
   it('accepts only exact approval/cancel tokens', () => {
     expect(policy.parseApproval('Yes')).toBe('approve');
     expect(policy.parseApproval('نعم')).toBe('approve');
