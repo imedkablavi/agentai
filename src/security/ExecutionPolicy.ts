@@ -29,6 +29,7 @@ const ACTIONS = new Set([
   'dev_inspect',
   'dev_test',
   'dev_fix',
+  'scheduler_disable_all',
 ]);
 
 const APPLICATIONS = new Set([
@@ -53,6 +54,10 @@ export class ExecutionPolicy {
   evaluate(command: ExecutionCommand, context: ConversationContext, mode: ExecutionMode = 'interactive'): PolicyDecision {
     if (!ACTIONS.has(command.action)) {
       return this.deny(`Action '${command.action}' is not registered in the execution policy.`);
+    }
+
+    if (command.action === 'scheduler_disable_all') {
+      return this.finish(command, mode, true, 'Disable all scheduled tasks');
     }
 
     if (command.action === 'open_application' || command.action === 'close_application') {
