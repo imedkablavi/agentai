@@ -1,3 +1,5 @@
+import { ConversationContext, Intent } from '../types';
+
 export type TimeTrigger =
   | { type: 'once'; at: string }
   | { type: 'daily'; at: string }
@@ -6,10 +8,9 @@ export type TimeTrigger =
 export interface ScheduledTask {
   id: string;
   trigger: TimeTrigger;
-  intent: any;
-  context_snapshot: any;
+  intent: Intent;
+  context_snapshot: ConversationContext;
   enabled: boolean;
   last_run?: string;
   next_run: string;
 }
-
