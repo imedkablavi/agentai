@@ -13,17 +13,24 @@ const SAFE_ENV_KEYS = [
   'TMPDIR',
   'APPDATA',
   'LOCALAPPDATA',
+  'DISPLAY',
+  'WAYLAND_DISPLAY',
   'XDG_RUNTIME_DIR',
+  'DBUS_SESSION_BUS_ADDRESS',
+  'XAUTHORITY',
+  'LANG',
+  'LC_ALL',
   'CI',
   'NODE_ENV',
 ] as const;
 
 /**
- * Build a deliberately small environment for tools that execute workspace code.
+ * Build a deliberately small environment for tools that execute workspace code
+ * or launch allowlisted desktop applications.
  *
  * This is not an OS sandbox: child processes can still access resources permitted
- * to the current user. The goal is to avoid handing arbitrary workspace scripts
- * ambient API keys/tokens through environment variables by default.
+ * to the current user. The goal is to avoid handing child processes ambient API
+ * keys, cloud credentials, tokens, and unrelated application secrets by default.
  */
 export function buildChildProcessEnv(
   source: NodeJS.ProcessEnv = process.env,
