@@ -5,18 +5,15 @@ export class MemorySkill implements Skill {
   supported_intents = ['memory_command'];
 
   validate(intent: Intent, _context: ConversationContext): boolean {
-    return !!intent.entities.query && intent.entities.query.length > 0;
+    return Boolean(intent.entities.query && intent.entities.query.trim().length > 0);
   }
 
   async execute(intent: Intent, _context: ConversationContext): Promise<ExecutionCommand> {
-    const memoryContent = intent.entities.query!;
     return {
       action: 'store_memory',
-      params: { content: memoryContent },
-      risk_level: 'low',
-      requires_confirmation: false
+      params: { content: intent.entities.query!.trim() },
+      risk_level: 'medium',
+      requires_confirmation: true,
     };
   }
-
-  // Stateless: no memory typing here; executor/MemMgr handles rules
 }

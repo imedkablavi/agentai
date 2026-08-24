@@ -4,66 +4,55 @@ export class SystemSkill implements Skill {
   name = 'SystemSkill';
   supported_intents = ['system_command'];
 
-  validate(intent: Intent, context: ConversationContext): boolean {
-    // High confidence required for system commands
-    return intent.confidence >= 0.9;
+  validate(intent: Intent, _context: ConversationContext): boolean {
+    // Validation establishes semantic intent only. ExecutionPolicy decides whether
+    // the resulting operation is allowed and whether explicit approval is needed.
+    return intent.name === 'system_command' && this.parseSystemCommand(intent.raw_text) !== null;
   }
 
   async execute(intent: Intent, _context: ConversationContext): Promise<ExecutionCommand> {
     const command = this.parseSystemCommand(intent.raw_text);
     if (!command) return { action: 'unknown', risk_level: 'high', requires_confirmation: true };
     const actionMap: Record<string, string> = {
-      shutdown: 'system_shutdown', restart: 'system_restart', lock: 'system_lock', sleep: 'system_sleep'
+      shutdown: 'system_shutdown',
+      restart: 'system_restart',
+      lock: 'system_lock',
+      sleep: 'system_sleep',
     };
     return {
       action: actionMap[command],
       risk_level: 'high',
-      requires_confirmation: true
+      requires_confirmation: true,
     };
   }
 
   private parseSystemCommand(text: string): string | null {
     const commands = {
       ar: {
-        'shutdown': [/أطفئ\s+الجهاز/i, /أطفئ\s+الكمبيوتر/i, /إيقاف\s+التشغيل/i],
-        'restart': [/أعد\s+التشغيل/i, /إعادة\s+التشغيل/i, /restart/i],
-        'lock': [/قفل\s+الشاشة/i, /اقفل\s+الشاشة/i, /lock/i],
-        'sleep': [/وضع\s+السبات/i, /sleep/i, /hibernate/i]
+        shutdown: [/^\s*أطفئ\s+(?:الجهاز|الكمبيوتر)\s*$/i, /^\s*إيقاف\s+التشغيل\s*$/i],
+        restart: [/^\s*(?:أعد|إعادة)\s+التشغيل\s*$/i, /^\s*restart\s*$/i],
+        lock: [/^\s*(?:قفل|اقفل)\s+الشاشة\s*$/i, /^\s*lock\s*$/i],
+        sleep: [/^\s*وضع\s+السبات\s*$/i, /^\s*(?:sleep|hibernate)\s*$/i],
       },
       tr: {
-        'shutdown': [/bilgisayarı\s+kapat/i, /kapat\s+computers/i, /kapat\s+sistem/i],
-        'restart': [/yeniden\s+başlat/i, /restart/i, /reboot/i],
-        'lock': [/ekranı\s+kilit/i, /kilit\s+ekran/i, /lock/i],
-        'sleep': [/uyku\s+modu/i, /sleep/i, /hibernate/i]
+        shutdown: [/^\s*bilgisayarı\s+kapat\s*$/i, /^\s*kapat\s+sistem\s*$/i],
+        restart: [/^\s*yeniden\s+başlat\s*$/i, /^\s*(?:restart|reboot)\s*$/i],
+        lock: [/^\s*ekranı\s+kilit\s*$/i, /^\s*kilit\s+ekran\s*$/i, /^\s*lock\s*$/i],
+        sleep: [/^\s*uyku\s+modu\s*$/i, /^\s*(?:sleep|hibernate)\s*$/i],
       },
       en: {
-        'shutdown': [/shutdown/i, /shut\s+down/i, /power\s+off/i],
-        'restart': [/restart/i, /reboot/i, /reset/i],
-        'lock': [/lock\s+screen/i, /lock\s+computer/i, /lock/i],
-        'sleep': [/sleep/i, /hibernate/i, /standby/i]
-      }
+        shutdown: [/^\s*(?:shutdown|shut\s+down|power\s+off)(?:\s+(?:the\s+)?(?:computer|pc|system))?\s*$/i],
+        restart: [/^\s*(?:restart|reboot)(?:\s+(?:the\s+)?(?:computer|pc|system))?\s*$/i],
+        lock: [/^\s*lock\s+(?:the\s+)?(?:screen|computer|pc)\s*$/i],
+        sleep: [/^\s*(?:sleep|hibernate|standby)(?:\s+(?:the\s+)?(?:computer|pc|system))?\s*$/i],
+      },
     };
 
-    for (const [lang, langCommands] of Object.entries(commands)) {
+    for (const langCommands of Object.values(commands)) {
       for (const [command, patterns] of Object.entries(langCommands)) {
-        if (patterns.some(pattern => pattern.test(text))) {
-          return command;
-        }
+        if (patterns.some(pattern => pattern.test(text))) return command;
       }
     }
-
     return null;
-  }
-
-
-  private getSuggestedActions(command: string): string[] {
-    const actions = {
-      'shutdown': ['Cancel shutdown', 'Restart instead', 'Lock screen'],
-      'restart': ['Cancel restart', 'Shutdown instead', 'Lock screen'],
-      'lock': ['Unlock screen', 'Shutdown', 'Restart'],
-      'sleep': ['Wake up', 'Shutdown', 'Restart']
-    };
-
-    return actions[command as keyof typeof actions] || ['Try another command'];
   }
 }

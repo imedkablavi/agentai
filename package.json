@@ -1,23 +1,41 @@
 {
   "name": "agentai",
   "version": "2.0.0",
-  "description": "Intelligent Windows Personal Assistant with Smart Memory and Context Awareness",
-  "main": "src/main.ts",
+  "description": "Policy-gated local AI assistant CLI with private memory, redacted auditing, and workspace-scoped developer tools",
+  "main": "dist/AIAssistant.js",
+  "types": "dist/AIAssistant.d.ts",
+  "bin": {
+    "agentai": "dist/main.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "SECURITY.md",
+    "docs/THREAT_MODEL.md",
+    "SECURITY_TEST_REPORT.md"
+  ],
   "scripts": {
     "start": "node dist/main.js",
+    "prestart": "npm run build",
     "dev": "tsx src/main.ts",
     "build": "tsc",
     "watch": "tsc --watch",
     "test": "jest",
+    "test:security": "jest --runInBand src/security src/memory src/skills src/intent src/execution",
     "lint": "eslint src/**/*.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test -- --runInBand",
+    "prepack": "npm run check && npm run build"
   },
   "keywords": [
     "ai-assistant",
+    "cli",
+    "local-first",
+    "security",
+    "privacy",
     "windows",
-    "voice-assistant",
+    "linux",
     "smart-memory",
-    "context-awareness",
     "skills-architecture"
   ],
   "author": "AI Architect",

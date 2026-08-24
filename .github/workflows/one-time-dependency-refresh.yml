@@ -1,0 +1,53 @@
+name: One-time dependency refresh
+
+on:
+  push:
+    branches:
+      - security/product-architecture-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: ${{ !contains(github.event.head_commit.message, '[deps-refresh]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+    steps:
+      - name: Checkout branch without persistent credentials
+        uses: actions/checkout@v4
+        with:
+          ref: security/product-architecture-hardening
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Remove unused runtime dependencies from manifest and lock
+        run: >-
+          npm uninstall --package-lock-only --ignore-scripts
+          dotenv edge-tts lodash node-record-lpcm16 puppeteer winston ws
+          @types/lodash @types/ws
+
+      - name: Upgrade Axios in manifest and lock
+        run: npm install --package-lock-only --ignore-scripts --save axios@latest
+
+      - name: Verify production dependency audit before commit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Commit refreshed dependency graph
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git diff --cached --check
+          git commit -m "chore: prune vulnerable unused runtime dependencies [deps-refresh] [skip ci]"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:security/product-architecture-hardening

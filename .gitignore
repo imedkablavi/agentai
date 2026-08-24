@@ -1,1 +1,29 @@
-node_modules
+node_modules/
+dist/
+coverage/
+
+# Runtime/private state must never be committed.
+.agentai/
+.agent*.log
+logs/
+data/memories/
+data/scheduler/
+
+# Environment and credentials.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Temporary/rollback artifacts.
+*.backup-*
+*.tmp
+*.temp-*
+*.agentai-preview-*
+
+# Editor/OS noise.
+.DS_Store
+Thumbs.db
