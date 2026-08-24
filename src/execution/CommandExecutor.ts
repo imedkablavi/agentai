@@ -5,6 +5,7 @@ import axios from 'axios';
 import { load } from 'cheerio';
 import { formatISO } from 'date-fns';
 import { randomUUID } from 'crypto';
+import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryManager } from '../memory/MemoryManager';
 import { ContextManager } from '../context/ContextManager';
@@ -14,6 +15,7 @@ import { ValidationEngine } from './ValidationEngine';
 import { ExecutionMutex, GitSafetyEngine } from './GitSafetyEngine';
 import { AuditTrail } from '../security/AuditTrail';
 import { redactString, redactedError } from '../security/Redaction';
+import { buildChildProcessEnv } from '../security/ChildProcessEnv';
 
 const execFileAsync = promisify(execFile);
 
@@ -282,6 +284,11 @@ export class CommandExecutor {
     if (!selection || !Number.isInteger(index) || index < 1 || index > selection.items.length) {
       return { success: false, error_detail: this.error('context', true, 'No valid active selection exists.', false) };
     }
+    const expiresAt = new Date(selection.expires_at).getTime();
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      this.context.setSelectionContext(null);
+      return { success: false, error_detail: this.error('context', true, 'Selection expired. Generate fresh results before opening an item.', false) };
+    }
 
     const item = selection.items[index - 1].data;
     const url = String(item?.url || '');
@@ -344,10 +351,24 @@ export class CommandExecutor {
     if (target) {
       const { root, pkg } = this.validator.getNearestPackageInfo(target);
       scopedCwd = root;
-      if (pkg.devDependencies?.jest || pkg.dependencies?.jest) {
-        executable = this.npxExecutable();
-        args = ['jest', '--runInBand', target];
-      } else if (!pkg.scripts?.test) {
+      const absoluteTarget = path.resolve(process.cwd(), target);
+      const declaresJest = Boolean(pkg.devDependencies?.jest || pkg.dependencies?.jest);
+      if (declaresJest) {
+        const jestCli = this.resolveLocalNodeCli(scopedCwd, 'jest', ['bin', 'jest.js']);
+        if (!jestCli) {
+          return {
+            success: false,
+            error_detail: this.error('context', false, 'Jest is declared but not installed locally. Run the package installation step before targeted testing.', false),
+          };
+        }
+        executable = process.execPath;
+        args = [jestCli, '--runInBand', '--runTestsByPath', absoluteTarget];
+      } else if (pkg.scripts?.test) {
+        return {
+          success: false,
+          error_detail: this.error('context', false, 'Targeted test execution is supported only for a locally installed Jest runner. Run the package test script without a target instead.', false),
+        };
+      } else {
         return { success: false, error_detail: this.error('context', false, `No test script is defined in scope ${path.basename(scopedCwd)}.`, false) };
       }
     }
@@ -504,7 +525,13 @@ export class CommandExecutor {
 
   private spawnDetached(executable: string, args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      const child = spawn(executable, args, { detached: true, stdio: 'ignore', windowsHide: true, shell: false });
+      const child = spawn(executable, args, {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+        shell: false,
+        env: buildChildProcessEnv(),
+      });
       const onError = (error: Error): void => reject(error);
       child.once('error', onError);
       child.once('spawn', () => {
@@ -521,9 +548,18 @@ export class CommandExecutor {
       timeout,
       maxBuffer: 1024 * 1024,
       windowsHide: true,
-      env: { ...process.env, npm_config_yes: 'false' },
+      env: buildChildProcessEnv(),
     });
     return { stdout: String(result.stdout || ''), stderr: String(result.stderr || '') };
+  }
+
+  private resolveLocalNodeCli(scopeRoot: string, packageName: string, scriptParts: string[]): string | null {
+    const roots = scopeRoot === process.cwd() ? [scopeRoot] : [scopeRoot, process.cwd()];
+    for (const root of roots) {
+      const candidate = path.join(root, 'node_modules', packageName, ...scriptParts);
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+    }
+    return null;
   }
 
   private isSafeUrl(raw: string): boolean {
@@ -546,7 +582,6 @@ export class CommandExecutor {
   private confirmKeyword(lang: 'ar' | 'tr' | 'en'): string { return lang === 'ar' ? 'نعم' : lang === 'tr' ? 'Evet' : 'Yes'; }
   private cancelKeyword(lang: 'ar' | 'tr' | 'en'): string { return lang === 'ar' ? 'إلغاء' : lang === 'tr' ? 'İptal' : 'Cancel'; }
   private npmExecutable(): string { return process.platform === 'win32' ? 'npm.cmd' : 'npm'; }
-  private npxExecutable(): string { return process.platform === 'win32' ? 'npx.cmd' : 'npx'; }
 
   private async searchMulti(query: string): Promise<Array<{ title: string; url: string; snippet: string; source: string }>> {
     const settled = await Promise.allSettled([this.ddg(query), this.bing(query)]);
