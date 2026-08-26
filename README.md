@@ -31,7 +31,7 @@ A personal + developer assistant with Arabic-first commands, safe execution, and
 - Permission-based skill execution
 - Context-aware safety thresholds
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Installation
 ```bash
@@ -69,7 +69,7 @@ dور لي فيديوهات عن البرمجة   # Find videos about programmin
 - `تكلم <path>` - Push-to-talk from audio file (Arabic command)
 - `exit/quit` - Exit the assistant
 
-## 🧠 Architecture
+##  Architecture
 
 ### Smart Memory System
 ```typescript
@@ -107,7 +107,7 @@ interface IntentEngine {
 }
 ```
 
-## 🛠️ Development
+##  Development
 
 ### Project Structure
 ```
@@ -150,7 +150,7 @@ The assistant stores memories in JSON files:
 - `data/memories/long_term.json` - Habits and patterns
 - `data/memories/preferences.json` - User preferences
 
-## 🔧 Configuration
+##  Configuration
 
 ### Safety Settings
 ```typescript
@@ -168,7 +168,7 @@ Multi-language response templates are configurable in the ResponseGenerator:
 - Turkish templates for Turkish users
 - English templates for international users
 
-## 📊 Memory Insights
+##  Memory Insights
 
 The assistant tracks:
 - **Habits**: Repeated behaviors (3+ occurrences)
@@ -177,7 +177,7 @@ The assistant tracks:
 
 Example memory insights:
 ```
-🧠 Memory Insights:
+ Memory Insights:
 Language: ar
 Browser: chrome
 Voice Mode: ON
@@ -191,7 +191,7 @@ Recent Patterns:
   - Arabic language preference (consistent)
 ```
 
-## 🔄 Context Awareness
+##  Context Awareness
 
 The assistant maintains context across conversations:
 - **Active Skills**: Currently active capabilities
@@ -199,7 +199,7 @@ The assistant maintains context across conversations:
 - **Awaiting Follow-up**: Pending user responses
 - **Conversation History**: Last 10 interactions
 
-## 🛡️ Safety Features
+##  Safety Features
 
 ### Confidence-Based Validation
 - Commands require minimum confidence scores
@@ -216,7 +216,7 @@ The assistant maintains context across conversations:
 - Missing context triggers clarification requests
 - Safety patterns prevent accidental execution
 
-## 🌐 Multi-Language Support
+##  Multi-Language Support
 
 ### Intent Recognition
 The assistant recognizes commands in:
@@ -230,14 +230,14 @@ Context-aware responses in the user's preferred language with:
 - Localized suggestions
 - Language-specific formatting
 
-## 📈 Performance
+##  Performance
 
 - **Response Time**: < 1 second average
 - **Memory Usage**: Efficient JSON storage
 - **Context Retention**: 5-minute timeout
 - **Conversation History**: Last 10 interactions
 
-## 🔍 Debugging
+##  Debugging
 
 ### Session Logs
 All interactions are logged to `logs/session-{timestamp}.log` with:
@@ -252,7 +252,7 @@ Use CLI commands to inspect system state:
 - `context` - Show current context
 - `help` - Show available commands
 
-## 🤝 Contributing
+##  Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -260,7 +260,7 @@ Use CLI commands to inspect system state:
 4. Update documentation
 5. Submit a pull request
 
-## 📄 License
+##  License
 
 MIT License - see LICENSE file for details.
 
@@ -274,4 +274,4 @@ For issues and questions:
 
 ---
 
-**Windows AI Assistant V2** - Your intelligent companion for Windows, built with ❤️ and advanced AI architecture.
+**Windows AI Assistant V2** - Your intelligent companion for Windows, built with  and advanced AI architecture.
